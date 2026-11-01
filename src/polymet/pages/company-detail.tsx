@@ -81,7 +81,7 @@ export default function CompanyDetailPage() {
                 { label: "Registration number", value: company.rcNumber ?? <span className="text-muted-foreground">Not provided</span> },
                 { label: "Website", value: <a className="inline-flex items-center gap-1 hover:underline" href={`https://${company.website}`} target="_blank" rel="noreferrer">{company.website} <ExternalLinkIcon className="size-3" /></a> },
                 { label: "Primary representative", value: company.representative },
-                { label: "Representative email", value: <MaskedValue value={company.representativeEmail} masked={maskEmail(company.representativeEmail)} permission="users.pii" label="email" /> },
+                { label: "Representative email", value: <MaskedValue value={company.representativeEmail} masked={maskEmail(company.representativeEmail)} permission="users.pii" label="email" userId={company.id} /> },
                 { label: "Registered", value: formatDate(company.registeredAt) },
               ]} />
             </SectionCard>

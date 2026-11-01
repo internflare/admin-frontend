@@ -15,11 +15,12 @@ import { adminService } from "@/polymet/lib/admin-service";
 import { useAdminQuery } from "@/polymet/lib/use-admin-query";
 import { formatDateTime, formatRelative } from "@/polymet/lib/format";
 import { recordDemoAction } from "@/polymet/lib/demo-actions";
-import { CURRENT_ADMIN } from "@/polymet/data/admin-roles";
+import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 
 const PRIORITY_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 } as const;
 
 export default function ActionQueuePage() {
+  const { admin } = useAdminAuth();
   const { data, loading, error, retry } = useAdminQuery(adminService.actionQueue);
   const [type, setType] = useState("all");
   const [priority, setPriority] = useState("all");
@@ -98,7 +99,7 @@ export default function ActionQueuePage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild><Link to={r.href}>Open record</Link></DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => recordDemoAction(`Assigned ${r.id} to ${CURRENT_ADMIN.name}`)}>
+                <DropdownMenuItem onSelect={() => recordDemoAction(`Assigned ${r.id} to ${admin?.name ?? "Me"}`)}>
                   <UserPlusIcon className="mr-2 size-4" /> Assign to me
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

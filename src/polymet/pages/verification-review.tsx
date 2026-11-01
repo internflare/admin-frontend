@@ -15,6 +15,8 @@ import { EmptyState } from "@/polymet/components/state-views";
 import { COMPANIES, VERIFICATION_REQUESTS } from "@/polymet/data/people-data";
 import { AUDIT_EVENTS } from "@/polymet/data/operations-data";
 import { formatDate, formatDateTime } from "@/polymet/lib/format";
+import { toast } from "sonner";
+import { adminService } from "@/polymet/lib/admin-service";
 import { recordDemoAction } from "@/polymet/lib/demo-actions";
 
 type Decision = "Approve" | "Reject" | "Request more information";
@@ -168,7 +170,19 @@ export default function VerificationReviewPage() {
                 : ["Company is notified of the specific information required", "Request moves to ‘More info requested’ until resubmitted"]
           }
           confirmLabel={decision ?? "Confirm"}
-          onConfirm={({ reason }) => recordDemoAction(`${decision} — ${request.id}`, `Reason: ${reason}. Checklist ${passed}/${checks.length} passed.`)}
+          onConfirm={async ({ reason, note }) => {
+            if (!decision || !request) return;
+            const mappedDecision = decision === "Approve" ? "Approve" : decision === "Reject" ? "Reject" : "Request more info";
+            await adminService.submitVerificationDecision(request.id, {
+              decision: mappedDecision,
+              reason,
+              note,
+              checklist: request.checklist.map((c, i) => ({ label: c.label, status: checks[i] ?? c.status })),
+            });
+            toast.success(`Verification decision submitted: ${decision}`, {
+              description: `Audit event registered for ${request.companyName} (${request.id}). Reason: ${reason}.`,
+            });
+          }}
         />
       </div>
     </PermissionGuard>

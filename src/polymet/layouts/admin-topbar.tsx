@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BellIcon, DatabaseIcon, LogOutIcon, MoonIcon, SearchIcon, ShieldCheckIcon, SunIcon, KeyRoundIcon } from "lucide-react";
+import { BellIcon, LogOutIcon, MoonIcon, SearchIcon, ShieldCheckIcon, SunIcon, KeyRoundIcon } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -20,7 +20,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
 import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import { PriorityBadge } from "@/polymet/components/status-badge";
@@ -73,17 +72,6 @@ export function AdminTopbar() {
       </button>
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="hidden items-center gap-1.5 rounded-md border border-dashed border-[#997fff]/60 bg-[#997fff]/10 shrink-0 whitespace-nowrap px-2 py-1 text-[11px] font-medium text-[#5b3fd1] xl:inline-flex dark:text-[#c4b5ff]">
-              <DatabaseIcon className="size-3" /> Sample data · backend not connected
-            </span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-64 text-xs">
-            All records are clearly-identified demonstration data. Actions are recorded locally and never change real accounts, payments or syncs.
-          </TooltipContent>
-        </Tooltip>
-
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="relative size-8" aria-label={`Alerts (${urgent.length})`}>

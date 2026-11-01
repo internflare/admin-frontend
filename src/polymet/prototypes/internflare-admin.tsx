@@ -43,8 +43,20 @@ import AnalyticsPage from "@/polymet/pages/analytics";
 import SettingsPage from "@/polymet/pages/settings";
 
 function RequireAdmin() {
-  const { admin } = useAdminAuth();
+  const { admin, isLoadingSession } = useAdminAuth();
   const location = useLocation();
+
+  if (isLoadingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-xs text-muted-foreground animate-pulse">Verifying secure administrator session…</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!admin) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return (
     <AdminLayout>

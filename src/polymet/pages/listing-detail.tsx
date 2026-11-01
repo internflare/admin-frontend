@@ -14,7 +14,8 @@ import { LISTINGS } from "@/polymet/data/jobs-data";
 import { COMPANIES } from "@/polymet/data/people-data";
 import { AUDIT_EVENTS } from "@/polymet/data/operations-data";
 import { formatDate, formatDateTime } from "@/polymet/lib/format";
-import { recordDemoAction } from "@/polymet/lib/demo-actions";
+import { toast } from "sonner";
+import { adminService } from "@/polymet/lib/admin-service";
 
 type Action = "Approve" | "Reject" | "Request changes" | "Pause" | "Close";
 
@@ -120,7 +121,24 @@ export default function ListingDetailPage() {
                     : ["Employer receives requested changes; listing stays unpublished until resubmitted"]
           }
           confirmLabel={action ?? ""}
-          onConfirm={({ reason }) => recordDemoAction(`${action} ${listing.id}`, reason)}
+          onConfirm={async ({ reason, note }) => {
+            if (!action || !listing) return;
+            const actionMapping: Record<Action, "Approve" | "Flag" | "Reject" | "Pause" | "Close" | "Changes requested"> = {
+              Approve: "Approve",
+              Reject: "Reject",
+              "Request changes": "Changes requested",
+              Pause: "Pause",
+              Close: "Close",
+            };
+            await adminService.moderateListing(listing.id, {
+              action: actionMapping[action],
+              reason,
+              note,
+            });
+            toast.success(`Listing moderation: ${action}`, {
+              description: `Audit event registered. Listing ${listing.id} set to ${action}. Reason: ${reason}.`,
+            });
+          }}
         />
       </div>
     </PermissionGuard>

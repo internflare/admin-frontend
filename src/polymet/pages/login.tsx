@@ -7,11 +7,19 @@ import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import { LoginCodeStep, LoginEmailStep } from "@/polymet/components/otp-login-steps";
 
 export default function LoginPage() {
-  const { admin, requestCode, verifyCode } = useAdminAuth();
+  const { admin, isLoadingSession, requestCode, verifyCode } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState<string | null>(null);
   const from = (location.state as { from?: string } | null)?.from ?? "/";
+
+  if (isLoadingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   if (admin) return <Navigate to={from} replace />;
 
@@ -67,10 +75,10 @@ export default function LoginPage() {
               }}
             />
           )}
-          <div className="rounded-lg border border-dashed border-[#997fff]/60 bg-[#997fff]/10 p-3 text-xs text-[#5b3fd1] dark:text-[#c4b5ff]">
-            <p className="font-medium">Demo mode</p>
-            <p className="mt-0.5 opacity-90">
-              Email delivery isn't connected — your code appears as a notification. Try <span className="font-mono">adaeze.okafor@internflare.com</span>.
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">Passwordless Email Delivery</p>
+            <p className="mt-0.5 leading-relaxed">
+              Single-use 6-digit codes are delivered to registered administrator email addresses and expire after 10 minutes.
             </p>
           </div>
           <p className="text-center text-[11px] text-muted-foreground">Need access? Ask a super administrator to send you an invitation.</p>

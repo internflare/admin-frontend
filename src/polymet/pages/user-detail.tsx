@@ -20,6 +20,8 @@ import { APPLICATIONS, PLACEMENTS, EVIDENCE, READINESS } from "@/polymet/data/jo
 import { SUBSCRIPTIONS, TRANSACTIONS } from "@/polymet/data/commercial-data";
 import { TICKETS, AUDIT_EVENTS, NOTIFICATION_EVENTS } from "@/polymet/data/operations-data";
 import { formatCurrency, formatDate, formatDateTime, formatRelative, maskEmail, maskPhone } from "@/polymet/lib/format";
+import { toast } from "sonner";
+import { adminService } from "@/polymet/lib/admin-service";
 import { recordDemoAction } from "@/polymet/lib/demo-actions";
 
 const TABS = [
@@ -131,8 +133,8 @@ export default function UserDetailPage() {
               </div>
               <DetailGrid
                 items={[
-                  { label: "Email", value: <MaskedValue value={user.email} masked={maskEmail(user.email)} permission="users.pii" label="email" /> },
-                  { label: "Phone", value: <MaskedValue value={user.phone} masked={maskPhone(user.phone)} permission="users.pii" label="phone" /> },
+                  { label: "Email", value: <MaskedValue value={user.email} masked={maskEmail(user.email)} permission="users.pii" label="email" userId={user.id} /> },
+                  { label: "Phone", value: <MaskedValue value={user.phone} masked={maskPhone(user.phone)} permission="users.pii" label="phone" userId={user.id} /> },
                   { label: "Registered", value: formatDate(user.registeredAt) },
                   { label: "Last active", value: formatRelative(user.lastActiveAt) },
                   { label: "Profile completion", value: <div className="flex items-center gap-2"><Progress value={user.profileCompletion} className="h-1.5 w-28" /> {user.profileCompletion}%</div> },
@@ -335,8 +337,17 @@ export default function UserDetailPage() {
                 : ["Full access is restored", "User is notified that access has been restored"]
           }
           confirmLabel={dialog?.label}
-          onConfirm={({ reason }) => {
-            recordDemoAction(`${dialog?.label} for ${user.id}`, `Reason: ${reason}`);
+          onConfirm={async ({ reason, note }) => {
+            if (!dialog || !user) return;
+            const targetStatus = dialog.kind === "suspend" ? "Suspended" : dialog.kind === "restrict" ? "Restricted" : "Active";
+            await adminService.updateUserStatus(user.id, {
+              status: targetStatus,
+              reason,
+              note,
+            });
+            toast.success(`User status updated to ${targetStatus}`, {
+              description: `Audit event registered. User ${user.id} set to ${targetStatus}.`,
+            });
             setRequested(dialog?.label ?? null);
           }}
         />
@@ -348,7 +359,17 @@ export default function UserDetailPage() {
           destructive={verifyDialog?.decision === "Reject"}
           consequences={["Decision, reviewer and timestamp are recorded", "Only this verification type changes — other verifications are unaffected", "User receives the configured verification notification"]}
           confirmLabel={verifyDialog?.decision}
-          onConfirm={({ note }) => recordDemoAction(`${verifyDialog?.decision} — ${verifyDialog?.kind}`, note)}
+          onConfirm={async ({ note }) => {
+            if (!verifyDialog || !user) return;
+            await adminService.submitVerificationDecision(user.id, {
+              decision: verifyDialog.decision === "Verify" ? "Approve" : "Reject",
+              reason: `${verifyDialog.kind} verification decision`,
+              note,
+            });
+            toast.success(`Verification ${verifyDialog.decision.toLowerCase()}ed: ${verifyDialog.kind}`, {
+              description: `Audit record created for ${user.name} (${user.id}).`,
+            });
+          }}
         />
       </div>
     </PermissionGuard>

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { CheckIcon, LockIcon, MinusIcon, UserPlusIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +17,7 @@ import type { FeatureState } from "@/polymet/data/dashboard-data";
 import { adminService } from "@/polymet/lib/admin-service";
 import { useAdminQuery } from "@/polymet/lib/use-admin-query";
 import { formatRelative } from "@/polymet/lib/format";
-import { recordDemoAction } from "@/polymet/lib/demo-actions";
+import { toast } from "sonner";
 
 type Tab = "platform" | "admins" | "features" | "security";
 type AdminUser = { id: string; name: string; email: string; role: string; mfa: boolean; lastActive: string; status: string };
@@ -291,8 +290,23 @@ export default function SettingsPage({ initialTab = "platform" }: { initialTab?:
           consequences={pending?.consequences}
           confirmLabel={pending?.label}
           destructive={pending?.destructive}
-          onConfirm={({ note }) => {
-            recordDemoAction(pending?.label ?? "Setting updated", note);
+          onConfirm={async ({ note }) => {
+            if (pending?.label === "Sign out everyone") {
+              await adminService.revokeAllSessions({ note });
+              toast.success("All administrative sessions revoked", {
+                description: "All active admin tokens invalidated. Users will be required to re-authenticate.",
+              });
+            } else if (pending?.target) {
+              const nextState: FeatureState = pending.label.startsWith("Enable") ? "Enabled" : "Disabled";
+              await adminService.updateFeatureFlag(pending.target, {
+                state: nextState,
+                note,
+              });
+              toast.success(`Feature flag updated: ${pending.target}`, {
+                description: `State changed to ${nextState}. Reason: ${note || "No note supplied"}.`,
+              });
+              flags.retry();
+            }
             setPending(null);
           }}
         />
@@ -304,8 +318,17 @@ export default function SettingsPage({ initialTab = "platform" }: { initialTab?:
           consequences={["Permissions change on the admin's next request", "Previous role is recorded in the audit log"]}
           confirmLabel="Change role"
           requireAcknowledgement
-          onConfirm={({ note }) => {
-            recordDemoAction(`Role changed for ${roleChange?.user.name}`, note);
+          onConfirm={async ({ note }) => {
+            if (roleChange) {
+              await adminService.updateAdminRole(roleChange.user.id, {
+                role: roleChange.role,
+                note,
+              });
+              toast.success(`Role updated for ${roleChange.user.name}`, {
+                description: `Assigned role: ${roleChange.role}. Audit event registered.`,
+              });
+              admins.retry();
+            }
             setRoleChange(null);
           }}
         />

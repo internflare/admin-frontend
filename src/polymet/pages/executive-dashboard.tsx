@@ -29,7 +29,26 @@ function SectionTitle({ children }: { children: string }) {
 export default function ExecutiveDashboardPage() {
   const { can } = useAdminRole();
   const [range, setRange] = useState("30d");
+  const dashboard = useAdminQuery(adminService.dashboard);
   const queue = useAdminQuery(adminService.actionQueue);
+
+  const kpis = dashboard.data?.kpis;
+  const charts = dashboard.data?.charts;
+
+  const totalTalents = kpis?.totalTalents ?? 20132;
+  const activeEmployers = kpis?.activeEmployers ?? 318;
+  const liveListings = kpis?.liveListings ?? 838;
+  const totalApplications = kpis?.totalApplications ?? 6110;
+  const placedInterns = kpis?.placedInterns ?? 83;
+  const activeWorkspaces = kpis?.activeWorkspaces ?? 229;
+  const mrr = kpis?.mrr ? `₦${(kpis.mrr / 1000).toFixed(2)}M` : "₦12.96M";
+
+  const growthSeries = charts?.growthSeries ?? GROWTH_SERIES;
+  const revenueSeries = charts?.revenueSeries ?? REVENUE_SERIES;
+  const workspaceActivitySeries = charts?.workspaceActivitySeries ?? WORKSPACE_ACTIVITY_SERIES;
+  const importHealthSeries = charts?.importHealthSeries ?? IMPORT_HEALTH_SERIES;
+  const recruitmentFunnel = charts?.recruitmentFunnel ?? RECRUITMENT_FUNNEL;
+  const outcomeFunnel = charts?.outcomeFunnel ?? OUTCOME_FUNNEL;
 
   return (
     <PermissionGuard permission="dashboard.view">
@@ -48,29 +67,29 @@ export default function ExecutiveDashboardPage() {
           }
         />
 
-        {queue.loading ? (
+        {dashboard.loading && queue.loading ? (
           <PageSkeleton />
-        ) : queue.error ? (
-          <ErrorState onRetry={queue.retry} />
+        ) : dashboard.error && !dashboard.data ? (
+          <ErrorState onRetry={() => { dashboard.retry(); queue.retry(); }} />
         ) : (
           <div className="grid gap-5 2xl:grid-cols-[1fr_400px]">
             <div className="min-w-0 space-y-5">
               <SectionTitle>Talent & recruitment</SectionTitle>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Registered talents" value={formatNumber(20132)} delta={5.2} icon={UsersIcon} href="/users" definition="Talent accounts with confirmed email. Excludes suspended and deleted accounts." />
-                <MetricCard label="Verified employers" value={formatNumber(318)} delta={3.1} icon={BadgeCheckIcon} href="/companies" definition="Companies with an approved company-verification decision. Registration alone does not count." />
-                <MetricCard label="Active listings" value={formatNumber(838)} delta={3.2} icon={BriefcaseIcon} href="/listings" footnote="Includes 412 external imports" />
-                <MetricCard label="New applications" value={formatNumber(6110)} kind="period" delta={-4.1} icon={FileStackIcon} href="/applications" />
+                <MetricCard label="Registered talents" value={formatNumber(totalTalents)} delta={5.2} icon={UsersIcon} href="/users" definition="Talent accounts with confirmed email. Excludes suspended and deleted accounts." />
+                <MetricCard label="Verified employers" value={formatNumber(activeEmployers)} delta={3.1} icon={BadgeCheckIcon} href="/companies" definition="Companies with an approved company-verification decision. Registration alone does not count." />
+                <MetricCard label="Active listings" value={formatNumber(liveListings)} delta={3.2} icon={BriefcaseIcon} href="/listings" footnote="Includes 412 external imports" />
+                <MetricCard label="New applications" value={formatNumber(totalApplications)} kind="period" delta={-4.1} icon={FileStackIcon} href="/applications" />
                 <MetricCard label="Shortlisted candidates" value={formatNumber(1402)} kind="period" delta={6.8} icon={ListChecksIcon} />
                 <MetricCard label="Interview requests" value={formatNumber(588)} kind="period" delta={2.4} icon={CalendarClockIcon} />
-                <MetricCard label="Offers / hires" value="104 / 83" kind="period" delta={8.1} icon={HandshakeIcon} href="/placements" definition="Hires counted only from recorded offer-acceptance events." />
+                <MetricCard label="Offers / hires" value={`104 / ${placedInterns}`} kind="period" delta={8.1} icon={HandshakeIcon} href="/placements" definition="Hires counted only from recorded offer-acceptance events." />
                 <MetricCard label="Employment conversion" value="33.1%" kind="period" delta={1.9} icon={TrendingUpIcon} definition="Completed internships with a recorded employment-conversion event ÷ completed internships." />
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <SectionCard title="User growth" description="Cumulative registered talents and employers">
                   <TrendChart
-                    data={GROWTH_SERIES}
+                    data={growthSeries}
                     xKey="month"
                     variant="area"
                     series={[
@@ -81,7 +100,7 @@ export default function ExecutiveDashboardPage() {
                 </SectionCard>
                 <SectionCard title="Listings & applications" description="New per month (June month-to-date)">
                   <TrendChart
-                    data={GROWTH_SERIES}
+                    data={growthSeries}
                     xKey="month"
                     variant="bar"
                     series={[
@@ -94,10 +113,10 @@ export default function ExecutiveDashboardPage() {
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <SectionCard title="Recruitment conversion" description="Stage counts in period; % = conversion from previous stage">
-                  <FunnelBars steps={RECRUITMENT_FUNNEL} />
+                  <FunnelBars steps={recruitmentFunnel} />
                 </SectionCard>
                 <SectionCard title="Internship outcomes" description="Completion and employment conversion from recorded outcomes">
-                  <FunnelBars steps={OUTCOME_FUNNEL} />
+                  <FunnelBars steps={outcomeFunnel} />
                   <p className="mt-4 text-xs text-muted-foreground">
                     1 completed engagement has no recorded outcome and is excluded from conversion.
                   </p>
@@ -108,13 +127,13 @@ export default function ExecutiveDashboardPage() {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard label="Active engagements" value={formatNumber(312)} delta={4.4} icon={UserCheckIcon} href="/engagements" />
                 <MetricCard label="Completed engagements" value={formatNumber(402)} kind="period" delta={2.0} icon={TrophyIcon} />
-                <MetricCard label="Active workspaces" value={formatNumber(229)} delta={1.7} icon={LayoutGridIcon} href="/workspaces" />
+                <MetricCard label="Active workspaces" value={formatNumber(activeWorkspaces)} delta={1.7} icon={LayoutGridIcon} href="/workspaces" />
                 <MetricCard label="Overdue tasks" value={formatNumber(92)} delta={13.6} invertDelta icon={AlarmClockIcon} href="/workspace-activity/projects" />
               </div>
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
                 <SectionCard title="Workspace activity" description="Tasks completed vs overdue per week">
                   <TrendChart
-                    data={WORKSPACE_ACTIVITY_SERIES}
+                    data={workspaceActivitySeries}
                     xKey="week"
                     variant="bar"
                     series={[
@@ -133,7 +152,7 @@ export default function ExecutiveDashboardPage() {
                 <>
                   <SectionTitle>Commercial</SectionTitle>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard label="Monthly recurring revenue" value="₦12.96M" delta={2.5} icon={WalletIcon} href="/analytics/commercial" definition="Sum of active, payment-confirmed subscriptions normalised to monthly. Pending-webhook subscriptions excluded." />
+                    <MetricCard label="Monthly recurring revenue" value={mrr} delta={2.5} icon={WalletIcon} href="/analytics/commercial" definition="Sum of active, payment-confirmed subscriptions normalised to monthly. Pending-webhook subscriptions excluded." />
                     <MetricCard label="Active paid subscriptions" value={formatNumber(2125)} delta={2.2} icon={RepeatIcon} href="/subscriptions" />
                     <MetricCard label="Upgrades" value="61" kind="period" delta={9.0} icon={ArrowUpCircleIcon} />
                     <MetricCard label="Failed payments" value="23" kind="period" delta={-53.1} invertDelta icon={CreditCardIcon} href="/transactions" />
@@ -142,7 +161,7 @@ export default function ExecutiveDashboardPage() {
                   </div>
                   <SectionCard title="Revenue & subscriptions" description="MRR (₦ millions) and failed payments">
                     <TrendChart
-                      data={REVENUE_SERIES}
+                      data={revenueSeries}
                       xKey="month"
                       series={[
                         { key: "mrr", label: "MRR (₦M)", color: "hsl(var(--chart-1))" },

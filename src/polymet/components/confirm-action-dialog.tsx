@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangleIcon, ShieldAlertIcon } from "lucide-react";
+import { AlertTriangleIcon, Loader2Icon, ShieldAlertIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
-import { CURRENT_ADMIN } from "@/polymet/data/admin-roles";
+import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import { cn } from "@/lib/utils";
 
 export interface ConfirmActionPayload {
@@ -34,7 +34,7 @@ interface ConfirmActionDialogProps {
   requireReason?: boolean;
   reasonOptions?: string[];
   requireAcknowledgement?: boolean;
-  onConfirm: (payload: ConfirmActionPayload) => void;
+  onConfirm: (payload: ConfirmActionPayload) => void | Promise<void>;
 }
 
 export function ConfirmActionDialog({
@@ -42,25 +42,30 @@ export function ConfirmActionDialog({
   destructive, requireReason = true, reasonOptions, requireAcknowledgement, onConfirm,
 }: ConfirmActionDialogProps) {
   const { role } = useAdminRole();
+  const { admin } = useAdminAuth();
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [ack, setAck] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const reasonValid = !requireReason || (reasonOptions ? reason.length > 0 : note.trim().length >= 10);
-  const canSubmit = reasonValid && (!requireAcknowledgement || ack);
+  const canSubmit = reasonValid && (!requireAcknowledgement || ack) && !isSubmitting;
 
   const reset = () => {
     setReason("");
     setNote("");
     setAck(false);
+    setIsSubmitting(false);
   };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) reset();
-        onOpenChange(o);
+        if (!o && !isSubmitting) {
+          reset();
+          onOpenChange(false);
+        }
       }}
     >
       <DialogContent className="sm:max-w-lg">
@@ -83,12 +88,19 @@ export function ConfirmActionDialog({
 
         <form
           className="space-y-4"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             if (!canSubmit) return;
-            onConfirm({ reason, note });
-            reset();
-            onOpenChange(false);
+            setIsSubmitting(true);
+            try {
+              await onConfirm({ reason, note });
+              reset();
+              onOpenChange(false);
+            } catch {
+              // Failed request toast is handled by apiClient; dialog remains open for correction
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         >
           {target && (
@@ -150,15 +162,28 @@ export function ConfirmActionDialog({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Recorded in the audit log as <span className="font-medium text-foreground">{CURRENT_ADMIN.name}</span> ({role.label}) with timestamp and reason.
+            Recorded in the audit log as <span className="font-medium text-foreground">{admin?.name ?? "Administrator"}</span> ({role.label}) with timestamp and reason.
           </p>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" className="bg-background" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="bg-background"
+              disabled={isSubmitting}
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" variant={destructive ? "destructive" : "default"} disabled={!canSubmit}>
-              {confirmLabel}
+              {isSubmitting ? (
+                <>
+                  <Loader2Icon className="mr-2 size-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                confirmLabel
+              )}
             </Button>
           </DialogFooter>
         </form>

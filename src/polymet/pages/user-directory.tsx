@@ -60,7 +60,7 @@ export default function UserDirectoryPage() {
         </Link>
       ),
     },
-    { key: "email", header: "Email", hideOnMobile: true, cell: (u) => <MaskedValue value={u.email} masked={maskEmail(u.email)} permission="users.pii" label="email" /> },
+    { key: "email", header: "Email", hideOnMobile: true, cell: (u) => <MaskedValue value={u.email} masked={maskEmail(u.email)} permission="users.pii" label="email" userId={u.id} /> },
     { key: "type", header: "Type", sortValue: (u) => u.accountType, cell: (u) => u.accountType },
     { key: "registered", header: "Registered", hideOnMobile: true, sortValue: (u) => u.registeredAt, cell: (u) => <span className="whitespace-nowrap text-muted-foreground">{formatDate(u.registeredAt)}</span> },
     {

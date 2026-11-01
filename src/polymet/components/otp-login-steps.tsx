@@ -8,6 +8,13 @@ import { OTP_LENGTH, OTP_RESEND_COOLDOWN_S } from "@/polymet/components/admin-au
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function maskEmail(val: string): string {
+  const [local, domain] = val.split("@");
+  if (!domain) return val;
+  if (local.length <= 2) return `${local[0]}*@${domain}`;
+  return `${local[0]}***${local.slice(-1)}@${domain}`;
+}
+
 interface EmailStepProps {
   defaultEmail?: string;
   onSubmit: (email: string) => Promise<string | null>;
@@ -133,7 +140,7 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
       <div className="space-y-1.5">
         <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
         <p className="text-sm text-muted-foreground">
-          We sent a {OTP_LENGTH}-digit code to <span className="font-medium text-foreground">{email}</span>. It expires in 10 minutes.
+          We sent a {OTP_LENGTH}-digit code to <span className="font-medium text-foreground">{maskEmail(email)}</span>. It expires in 10 minutes.
         </p>
       </div>
       <div className="space-y-2">

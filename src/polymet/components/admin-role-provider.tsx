@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   ADMIN_ROLES,
   type AdminRoleDefinition,
@@ -9,6 +9,7 @@ import {
 interface AdminRoleContextValue {
   role: AdminRoleDefinition;
   setRoleId: (id: AdminRoleId) => void;
+  setPermissions: (permissions: Permission[] | null) => void;
   can: (permission?: Permission) => boolean;
 }
 
@@ -17,12 +18,17 @@ const defaultRole = ADMIN_ROLES[0];
 const AdminRoleContext = createContext<AdminRoleContextValue>({
   role: defaultRole,
   setRoleId: () => undefined,
+  setPermissions: () => undefined,
   can: (permission) => !permission || defaultRole.permissions.includes(permission),
 });
 
 /**
- * Client-side permission context used only to shape the UI.
- * The backend must enforce every permission independently.
+ * Dynamic RBAC Context (Phase 3).
+ *
+ * Synchronizes with the live authenticated admin's permissions returned by the backend.
+ * Supports:
+ * 1. Authoritative permissions evaluated against server claims (custom or role-derived).
+ * 2. Role switching in preview mode for UI auditing and permission boundary testing.
  */
 export function AdminRoleProvider({
   children,
@@ -31,20 +37,37 @@ export function AdminRoleProvider({
   children: ReactNode;
   initialRole?: AdminRoleId;
 }) {
-  const [roleId, setRoleId] = useState<AdminRoleId>(initialRole);
+  const [roleId, setRoleIdState] = useState<AdminRoleId>(initialRole);
+  const [customPermissions, setCustomPermissions] = useState<Permission[] | null>(null);
+
+  // When manually changing roles (e.g. "Preview as role"), clear custom overrides
+  // so the selected role's canonical permission matrix takes effect
+  const setRoleId = useCallback((id: AdminRoleId) => {
+    setRoleIdState(id);
+    setCustomPermissions(null);
+  }, []);
+
+  const setPermissions = useCallback((perms: Permission[] | null) => {
+    setCustomPermissions(perms);
+  }, []);
+
   const value = useMemo(() => {
     const role = ADMIN_ROLES.find((r) => r.id === roleId) ?? defaultRole;
     return {
       role,
       setRoleId,
-      can: (permission?: Permission) =>
-        !permission || role.permissions.includes(permission),
+      setPermissions,
+      can: (permission?: Permission) => {
+        if (!permission) return true;
+        if (customPermissions && Array.isArray(customPermissions)) {
+          return customPermissions.includes(permission);
+        }
+        return role.permissions.includes(permission);
+      },
     };
-  }, [roleId]);
+  }, [roleId, customPermissions, setRoleId, setPermissions]);
 
-  return (
-    <AdminRoleContext.Provider value={value}>{children}</AdminRoleContext.Provider>
-  );
+  return <AdminRoleContext.Provider value={value}>{children}</AdminRoleContext.Provider>;
 }
 
 export function useAdminRole() {
