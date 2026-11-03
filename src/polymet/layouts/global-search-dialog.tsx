@@ -1,84 +1,61 @@
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command";
-import { StatusBadge } from "@/polymet/components/status-badge";
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { Button } from "@/components/ui/button";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
-import type { Permission } from "@/polymet/data/admin-roles";
-import { USERS, COMPANIES } from "@/polymet/data/people-data";
-import { LISTINGS, APPLICATIONS, PLACEMENTS } from "@/polymet/data/jobs-data";
-import { WORKSPACES } from "@/polymet/data/squadcot-data";
-import { SUBSCRIPTIONS, TRANSACTIONS } from "@/polymet/data/commercial-data";
-import { TICKETS, AUDIT_EVENTS } from "@/polymet/data/operations-data";
 import { ADMIN_NAV } from "@/polymet/data/admin-nav";
+import { displayValue } from "@/polymet/components/resource-page";
+import { fetchCollection, recordId, resources, type ResourceDefinition } from "@/polymet/lib/admin-service";
+import { useAdminQuery } from "@/polymet/lib/use-admin-query";
+import { Skeleton } from "@/components/ui/skeleton";
 
-interface SearchGroup {
-  heading: string;
-  permission: Permission;
-  items: { id: string; title: string; subtitle: string; status: string; href: string }[];
+const SEARCHABLE = [
+  { resource: resources.users, path: "/users", titleKey: "name" },
+  { resource: resources.companies, path: "/companies", titleKey: "name" },
+  { resource: resources.listings, path: "/listings", titleKey: "title" },
+  { resource: resources.workspaces, path: "/workspaces", titleKey: "name" },
+  { resource: resources.mentors, path: "/mentors", titleKey: "name" },
+  { resource: resources.supervisors, path: "/supervisors", titleKey: "name" },
+  { resource: resources.transactions, path: "/transactions", titleKey: "id" },
+  { resource: resources.audit, path: "/audit-logs", titleKey: "action" },
+] satisfies { resource: ResourceDefinition; path: string; titleKey: string }[];
+
+function SearchResults({ resource, path, titleKey, query, go }: typeof SEARCHABLE[number] & { query: string; go: (path: string) => void }) {
+  const fetcher = useCallback(() => fetchCollection(resource, { search: query, page: 1, limit: 5 }), [resource, query]);
+  const result = useAdminQuery(fetcher);
+  return <CommandGroup heading={resource.title}>
+    {result.loading ? <div role="status" aria-busy="true" aria-label="Searching backend" className="space-y-3 px-2 py-2"><span className="sr-only">Searching backend</span>{[0, 1, 2].map((i) => <Skeleton key={i} className="h-8 w-full" />)}</div> :
+      result.error ? <div className="px-2 py-2 text-xs" role="alert"><p className="text-destructive">{result.error}</p><Button size="sm" variant="outline" onClick={result.retry}>Retry</Button></div> :
+        result.data?.records.length === 0 ? <p className="px-2 py-2 text-xs text-muted-foreground">No matching records returned.</p> :
+          result.data?.records.map((record) => <CommandItem key={recordId(record)} value={`${resource.endpoint}:${recordId(record)}`} onSelect={() => go("detailPath" in resource ? `${resource.detailPath}/${encodeURIComponent(recordId(record))}` : `${path}?search=${encodeURIComponent(query)}`)}>
+            <div className="min-w-0"><p className="truncate">{displayValue(record[titleKey])}</p><p className="truncate font-mono text-[11px] text-muted-foreground">{recordId(record)}</p></div>
+          </CommandItem>)}
+    {result.data && <CommandItem value={`all:${path}`} onSelect={() => go(`${path}?search=${encodeURIComponent(query)}`)}>Open directory · {result.data.pagination?.total.toLocaleString()} matching records</CommandItem>}
+  </CommandGroup>;
 }
-
-const GROUPS: SearchGroup[] = [
-  { heading: "Users & talent", permission: "users.view", items: USERS.map((u) => ({ id: u.id, title: u.name, subtitle: `${u.id} · ${u.accountType}`, status: u.status, href: `/users/${u.id}` })) },
-  { heading: "Companies", permission: "companies.view", items: COMPANIES.map((c) => ({ id: c.id, title: c.name, subtitle: `${c.id} · ${c.industry}`, status: c.verification, href: `/companies/${c.id}` })) },
-  { heading: "Listings", permission: "listings.view", items: LISTINGS.map((l) => ({ id: l.id, title: l.title, subtitle: `${l.id} · ${l.company}`, status: l.status, href: `/listings/${l.id}` })) },
-  { heading: "Applications", permission: "recruitment.view", items: APPLICATIONS.map((a) => ({ id: a.id, title: `${a.candidate} → ${a.listing}`, subtitle: a.id, status: a.stage, href: `/applications?ref=${a.id}` })) },
-  { heading: "Engagements", permission: "recruitment.view", items: PLACEMENTS.map((p) => ({ id: p.id, title: `${p.candidate} · ${p.employer}`, subtitle: p.id, status: p.status, href: `/placements?ref=${p.id}` })) },
-  { heading: "Workspaces", permission: "workspaces.view", items: WORKSPACES.map((w) => ({ id: w.id, title: w.company, subtitle: w.id, status: w.health, href: `/workspaces/${w.id}` })) },
-  { heading: "Subscriptions", permission: "finance.view", items: SUBSCRIPTIONS.map((s) => ({ id: s.id, title: `${s.account} · ${s.plan}`, subtitle: s.id, status: s.status, href: `/subscriptions/${s.id}` })) },
-  { heading: "Transactions", permission: "finance.view", items: TRANSACTIONS.map((t) => ({ id: t.id, title: `${t.category} · ${t.payer}`, subtitle: `${t.id} · ${t.providerRef}`, status: t.status, href: `/transactions?ref=${t.id}` })) },
-  { heading: "Support tickets", permission: "support.view", items: TICKETS.map((t) => ({ id: t.id, title: t.subject, subtitle: `${t.id} · ${t.requester}`, status: t.status, href: `/support/${t.id}` })) },
-  { heading: "Audit events", permission: "audit.view", items: AUDIT_EVENTS.map((a) => ({ id: a.id, title: a.action, subtitle: `${a.id} · ${a.entity}`, status: a.outcome, href: `/audit-logs?ref=${a.id}` })) },
-];
 
 export function GlobalSearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const navigate = useNavigate();
   const { can } = useAdminRole();
-
+  const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSubmittedQuery(query.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [query]);
   const go = (href: string) => {
     onOpenChange(false);
     navigate(href);
   };
-
-  return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Search users, companies, listings, transactions, tickets, audit IDs…" />
-      <CommandList className="max-h-[420px]">
-        <CommandEmpty>No authorised records match.</CommandEmpty>
-        <CommandGroup heading="Go to module">
-          {ADMIN_NAV.flatMap((s) => s.items)
-            .filter((i) => can(i.permission))
-            .map((item) => (
-              <CommandItem key={item.href} value={`module ${item.title}`} onSelect={() => go(item.href)}>
-                <item.icon className="mr-2 size-4 text-muted-foreground" />
-                {item.title}
-              </CommandItem>
-            ))}
-        </CommandGroup>
-        <CommandSeparator />
-        {GROUPS.filter((g) => can(g.permission)).map((group) => (
-          <CommandGroup key={group.heading} heading={group.heading}>
-            {group.items.map((item) => (
-              <CommandItem key={item.id} value={`${item.title} ${item.subtitle}`} onSelect={() => go(item.href)} className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{item.title}</p>
-                  <p className="truncate font-mono text-[11px] text-muted-foreground">{item.subtitle}</p>
-                </div>
-                <StatusBadge status={item.status} />
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-      </CommandList>
-      <div className="border-t px-3 py-2 text-[11px] text-muted-foreground">
-        Results are limited to records your role is authorised to view.
-      </div>
-    </CommandDialog>
-  );
+  const modules = ADMIN_NAV.flatMap((section) => section.items).filter((item) => (can(item.permission) || (item.alternativePermission && can(item.alternativePermission))) && item.title.toLowerCase().includes(query.toLowerCase()));
+  return <CommandDialog open={open} onOpenChange={onOpenChange} shouldFilter={false}>
+    <CommandInput value={query} onValueChange={setQuery} placeholder="Find modules or search backend directories…" />
+    <CommandList className="max-h-[420px]">
+      <CommandEmpty>No matching modules.</CommandEmpty>
+      <CommandGroup heading="Go to module">{modules.map((item) => <CommandItem key={item.href} value={`module:${item.href}`} onSelect={() => go(item.href)}><item.icon className="mr-2 size-4 text-muted-foreground" />{item.title}</CommandItem>)}</CommandGroup>
+      <CommandSeparator />
+      {open && submittedQuery.length >= 2 && submittedQuery === query.trim() ? SEARCHABLE.filter(({ resource }) => can(resource.permission)).map((group) => <SearchResults key={`${group.path}:${submittedQuery}`} {...group} query={submittedQuery} go={go} />) : <p className="p-3 text-xs text-muted-foreground">Enter at least two characters to search authorised backend directories.</p>}
+    </CommandList>
+    <div className="border-t px-3 py-2 text-[11px] text-muted-foreground">Each directory uses its supported server-side search fields; ID search is not universal. Up to five results per directory. Subscriptions, support, alerts and other unsupported datasets are unavailable.</div>
+  </CommandDialog>;
 }

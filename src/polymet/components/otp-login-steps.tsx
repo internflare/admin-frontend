@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { OTP_LENGTH, OTP_RESEND_COOLDOWN_S } from "@/polymet/components/admin-auth-provider";
+import { OTP_LENGTH, OTP_RESEND_COOLDOWN_S, OTP_TTL_MS } from "@/polymet/components/admin-auth-provider";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -140,7 +140,8 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
       <div className="space-y-1.5">
         <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
         <p className="text-sm text-muted-foreground">
-          We sent a {OTP_LENGTH}-digit code to <span className="font-medium text-foreground">{maskEmail(email)}</span>. It expires in 10 minutes.
+          If <span className="font-medium text-foreground">{maskEmail(email)}</span> belongs to an active administrator,
+          a {OTP_LENGTH}-digit code will arrive by email. It expires {OTP_TTL_MS / 60_000} minutes after your request.
         </p>
       </div>
       <div className="space-y-2">

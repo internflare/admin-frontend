@@ -138,10 +138,3 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "analytics.export": "Export reports",
   "system.manage": "Manage system settings & admins",
 };
-
-export const CURRENT_ADMIN = {
-  id: "ADM-001",
-  name: "Adaeze Okafor",
-  email: "adaeze.okafor@internflare.com",
-  avatar: "https://github.com/denizbuyuktas.png",
-};

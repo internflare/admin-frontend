@@ -73,7 +73,7 @@ export function TrendChart({ data, xKey, series, variant = "line", height = 220,
 
 /** Stage-by-stage conversion bars computed from recorded stage counts. */
 export function FunnelBars({ steps, className }: { steps: { stage: string; value: number }[]; className?: string }) {
-  const max = steps[0]?.value || 1;
+  const max = Math.max(...steps.map((step) => step.value), 0);
   return (
     <ol className={cn("space-y-3", className)}>
       {steps.map((step, i) => {
@@ -91,7 +91,7 @@ export function FunnelBars({ steps, className }: { steps: { stage: string; value
             <div className="h-2 rounded-full bg-muted">
               <div
                 className="h-2 rounded-full bg-primary"
-                style={{ width: `${Math.max(2, (step.value / max) * 100)}%`, opacity: 1 - i * 0.14 }}
+                style={{ width: `${max > 0 ? Math.max(0, (step.value / max) * 100) : 0}%`, opacity: Math.max(0.2, 1 - i * 0.14) }}
               />
             </div>
           </li>

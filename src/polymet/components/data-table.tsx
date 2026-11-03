@@ -38,12 +38,13 @@ interface DataTableProps<T> {
   initialSort?: { key: string; dir: "asc" | "desc" };
   className?: string;
   dense?: boolean;
+  serverPaginated?: boolean;
 }
 
 export function DataTable<T>({
   data, columns, getRowId, loading, error, onRetry, searchPlaceholder = "Search…", getSearchText, toolbar,
   rowActions, onRowClick, pageSize: initialPageSize = 10, emptyTitle = "No records match", emptyDescription = "Try adjusting search or filters.",
-  emptyAction, initialSort, className, dense,
+  emptyAction, initialSort, className, dense, serverPaginated,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(initialSort ?? null);
@@ -194,7 +195,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      {!loading && !error && processed.length > 0 && (
+      {!serverPaginated && !loading && !error && processed.length > 0 && (
         <div className="flex flex-col items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground sm:flex-row">
           <span>
             Showing {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, processed.length)} of {processed.length}

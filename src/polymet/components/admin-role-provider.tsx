@@ -19,7 +19,7 @@ const AdminRoleContext = createContext<AdminRoleContextValue>({
   role: defaultRole,
   setRoleId: () => undefined,
   setPermissions: () => undefined,
-  can: (permission) => !permission || defaultRole.permissions.includes(permission),
+  can: (permission) => !permission,
 });
 
 /**
@@ -28,7 +28,6 @@ const AdminRoleContext = createContext<AdminRoleContextValue>({
  * Synchronizes with the live authenticated admin's permissions returned by the backend.
  * Supports:
  * 1. Authoritative permissions evaluated against server claims (custom or role-derived).
- * 2. Role switching in preview mode for UI auditing and permission boundary testing.
  */
 export function AdminRoleProvider({
   children,
@@ -38,17 +37,15 @@ export function AdminRoleProvider({
   initialRole?: AdminRoleId;
 }) {
   const [roleId, setRoleIdState] = useState<AdminRoleId>(initialRole);
-  const [customPermissions, setCustomPermissions] = useState<Permission[] | null>(null);
+  const [customPermissions, setCustomPermissions] = useState<Permission[]>([]);
 
-  // When manually changing roles (e.g. "Preview as role"), clear custom overrides
-  // so the selected role's canonical permission matrix takes effect
   const setRoleId = useCallback((id: AdminRoleId) => {
     setRoleIdState(id);
-    setCustomPermissions(null);
+    setCustomPermissions([]);
   }, []);
 
   const setPermissions = useCallback((perms: Permission[] | null) => {
-    setCustomPermissions(perms);
+    setCustomPermissions(perms ?? []);
   }, []);
 
   const value = useMemo(() => {
@@ -59,10 +56,7 @@ export function AdminRoleProvider({
       setPermissions,
       can: (permission?: Permission) => {
         if (!permission) return true;
-        if (customPermissions && Array.isArray(customPermissions)) {
-          return customPermissions.includes(permission);
-        }
-        return role.permissions.includes(permission);
+        return customPermissions.includes(permission);
       },
     };
   }, [roleId, customPermissions, setRoleId, setPermissions]);

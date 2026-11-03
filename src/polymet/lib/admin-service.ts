@@ -1,694 +1,189 @@
-/**
- * Admin Service Boundary (Phase 4 Domain Data Services Migration)
- *
- * Replaces simulated timeouts and static mock data arrays with live HTTP
- * requests pointing to the Admin API Gateway (/api/v1/admin/*).
- *
- * Architectural Guarantees:
- * 1. Strict `credentials: "include"` and `X-Correlation-ID` via `apiClient`.
- * 2. Unwraps RFC-compliant data envelopes ({ data: T } or { [resource]: T })
- *    while preserving type safety across all 27 admin console views.
- * 3. Backward-compatible type signatures with zero frontend regressions.
- */
+import { apiClient, ApiError, handleApiError } from "@/polymet/lib/api-client";
+import type { Permission } from "@/polymet/data/admin-roles";
 
-import { apiClient, type RequestOptions } from "@/polymet/lib/api-client";
-import {
-  type PlatformUser,
-  type Company,
-  type VerificationRequest,
-  type Mentor,
-  type MentorBooking,
-  type Supervisor,
-  type SupervisorRequest,
-  type AccessCase,
-  type Invitation,
-  USERS,
-  COMPANIES,
-  VERIFICATION_REQUESTS,
-  MENTORS,
-  MENTOR_BOOKINGS,
-  SUPERVISORS,
-  SUPERVISOR_REQUESTS,
-  ACCESS_CASES,
-  INVITATIONS,
-} from "@/polymet/data/people-data";
-import {
-  type Listing,
-  type Application,
-  type Placement,
-  type EvidenceItem,
-  type ReadinessRecord,
-  LISTINGS,
-  APPLICATIONS,
-  PLACEMENTS,
-  EVIDENCE,
-  READINESS,
-} from "@/polymet/data/jobs-data";
-import {
-  type Workspace,
-  type WorkspaceMember,
-  type WorkspaceProject,
-  type WorkspaceReport,
-  type OnboardingRecord,
-  type WorkspaceAccessIssue,
-  WORKSPACES,
-  WORKSPACE_MEMBERS,
-  WORKSPACE_PROJECTS,
-  WORKSPACE_REPORTS,
-  ONBOARDING,
-  WORKSPACE_ACCESS_ISSUES,
-} from "@/polymet/data/squadcot-data";
-import {
-  type Plan,
-  type Subscription,
-  type Transaction,
-  PLANS,
-  SUBSCRIPTIONS,
-  TRANSACTIONS,
-} from "@/polymet/data/commercial-data";
-import {
-  type ExternalSource,
-  type SyncRun,
-  type FailedImport,
-  type DuplicateCandidate,
-  type AIEvent,
-  type MatchReview,
-  EXTERNAL_SOURCES,
-  SYNC_RUNS,
-  FAILED_IMPORTS,
-  DUPLICATES,
-  AI_EVENTS,
-  MATCH_REVIEWS,
-} from "@/polymet/data/integrations-data";
-import {
-  type ActionItem,
-  type SupportTicket,
-  type Dispute,
-  type NotificationTemplate,
-  type NotificationEvent,
-  type AuditEvent,
-  ACTION_QUEUE,
-  TICKETS,
-  DISPUTES,
-  NOTIFICATION_TEMPLATES,
-  NOTIFICATION_EVENTS,
-  AUDIT_EVENTS,
-} from "@/polymet/data/operations-data";
-import {
-  type FeatureState,
-  ADMIN_USERS,
-  FEATURE_FLAGS,
-  GROWTH_SERIES,
-  REVENUE_SERIES,
-  WORKSPACE_ACTIVITY_SERIES,
-  IMPORT_HEALTH_SERIES,
-  RECRUITMENT_FUNNEL,
-  OUTCOME_FUNNEL,
-  SOURCE_PERFORMANCE,
-  HEALTH_SERVICES,
-} from "@/polymet/data/dashboard-data";
+export type AdminRecord = Record<string, unknown>;
+export type QueryParams = Record<string, string | number | undefined>;
 
-export interface AdminUserRecord {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  mfa: boolean;
-  lastActive: string;
-  status: string;
-}
-
-export interface FeatureFlag {
+export interface ResourceField {
   key: string;
-  name: string;
-  area: string;
-  state: FeatureState;
-  note: string;
+  label: string;
+  format?: "date" | "status" | "money";
+  href?: (record: AdminRecord) => string | undefined;
 }
 
-export interface DashboardKPIs {
-  totalTalents: number;
-  activeEmployers: number;
-  liveListings: number;
-  totalApplications: number;
-  placedInterns: number;
-  activeWorkspaces: number;
-  mrr: number;
-  pendingReconciliations: number;
+export interface ResourceDefinition {
+  title: string;
+  endpoint: string;
+  envelope: string;
+  permission: Permission;
+  alternativePermission?: Permission;
+  fields: ResourceField[];
+  paginated?: boolean;
+  search?: boolean;
+  detailPath?: string;
+  note?: string;
+  filters?: { key: string; label: string; options: string[] }[];
 }
 
-export interface DashboardOverview {
-  success?: boolean;
-  kpis: DashboardKPIs;
-  charts: {
-    growthSeries: typeof GROWTH_SERIES;
-    revenueSeries: typeof REVENUE_SERIES;
-    workspaceActivitySeries: typeof WORKSPACE_ACTIVITY_SERIES;
-    importHealthSeries: typeof IMPORT_HEALTH_SERIES;
-    recruitmentFunnel: typeof RECRUITMENT_FUNNEL;
-    outcomeFunnel: typeof OUTCOME_FUNNEL;
-    sourcePerformance?: typeof SOURCE_PERFORMANCE;
-  };
-  healthServices?: typeof HEALTH_SERVICES;
-  timestamp?: string;
+export interface CollectionResult {
+  records: AdminRecord[];
+  pagination?: { page: number; total: number; totalPages: number };
 }
 
-export const IS_SAMPLE_DATA = false;
+export function isRecord(value: unknown): value is AdminRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-/**
- * Robust endpoint fetcher that unpacks common API envelope structures:
- * 1. Naked payload: [ ... ] or { ... }
- * 2. Standard envelope: { data: T }
- * 3. Resource-specific envelope: { [key]: T }
- * 4. Auto-unwraps nested list arrays if envelope key differs (e.g. { queue: [...] })
- */
-async function fetchEndpoint<T>(
-  endpoint: string,
-  envelopeKey?: string,
-  options?: RequestOptions,
-): Promise<T> {
-  const res = await apiClient.get<Record<string, unknown> | T>(endpoint, options);
+export function recordId(record: AdminRecord): string {
+  const id = record._id ?? record.id ?? record.key;
+  return typeof id === "string" ? id : "";
+}
 
-  if (res === null || res === undefined) {
-    return res as T;
+export function fieldValue(record: AdminRecord, key: string): unknown {
+  return key.split(".").reduce<unknown>((value, part) => isRecord(value) ? value[part] : undefined, record);
+}
+
+export function invalidResponse(endpoint: string): never {
+  throw handleApiError(new ApiError(502, "Invalid API response", {
+    message: `The API returned an invalid response for ${endpoint}. No data has been substituted.`,
+  }));
+}
+
+export const resources = {
+  users: {
+    title: "Talent & user accounts", endpoint: "/users", envelope: "users", permission: "users.view",
+    paginated: true, search: true, detailPath: "/users",
+    fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email (server-authorised)" }, { key: "role", label: "Account type" }, { key: "status", label: "Status", format: "status" }, { key: "emailVerified", label: "Email verified" }, { key: "createdAt", label: "Registered", format: "date" }],
+    filters: [{ key: "status", label: "Status", options: ["Active", "Restricted", "Suspended", "Deactivated"] }, { key: "accountType", label: "Type", options: ["talent", "employer", "employee", "supervisor", "mentor"] }],
+    note: "Identity, qualification, profile completeness, plan and last-active data are not supplied by the user API. Email verification is not identity verification.",
+  },
+  companies: {
+    title: "Company directory", endpoint: "/companies", envelope: "companies", permission: "companies.view",
+    paginated: true, search: true, detailPath: "/companies",
+    fields: [{ key: "name", label: "Company" }, { key: "industry", label: "Industry" }, { key: "country", label: "Country" }, { key: "verification_status", label: "Verification", format: "status" }, { key: "representative_name", label: "Representative" }, { key: "created_at", label: "Registered", format: "date" }],
+    filters: [{ key: "verificationStatus", label: "Verification", options: ["UNVERIFIED", "PENDING_REVIEW", "VERIFIED", "REJECTED"] }],
+  },
+  verification: {
+    title: "Company verification", endpoint: "/verification", envelope: "queue", permission: "companies.view",
+    paginated: true, detailPath: "/verification",
+    fields: [{ key: "company.name", label: "Company" }, { key: "status", label: "Decision", format: "status" }, { key: "reviewer_id", label: "Reviewer ID" }, { key: "created_at", label: "Submitted", format: "date" }],
+    filters: [{ key: "status", label: "Status", options: ["PENDING_REVIEW", "MORE_INFO_REQUIRED", "APPROVED", "REJECTED"] }],
+    note: "By default the backend returns pending reviews and requests for more information. Choose a status to see completed decisions.",
+  },
+  listings: {
+    title: "Jobs & internships", endpoint: "/listings", envelope: "listings", permission: "listings.view",
+    paginated: true, search: true, detailPath: "/listings",
+    fields: [{ key: "title", label: "Listing" }, { key: "company.name", label: "Company" }, { key: "external_company_name", label: "External company" }, { key: "source_type", label: "Source" }, { key: "opportunity_type", label: "Type" }, { key: "work_arrangement", label: "Arrangement" }, { key: "status", label: "Publication", format: "status" }, { key: "moderation_status", label: "Moderation", format: "status" }, { key: "created_at", label: "Created", format: "date" }],
+    filters: [{ key: "moderationStatus", label: "Moderation", options: ["Pending", "Approved", "Rejected", "Flagged"] }],
+    note: "The list API does not provide application totals, expiry dates or report counts. Publication status and moderation status are separate backend fields.",
+  },
+  applications: {
+    title: "Applications", endpoint: "/applications", envelope: "applications", permission: "recruitment.view",
+    paginated: true,
+    fields: [{ key: "talent.name", label: "Candidate", href: (r) => typeof r.talent_id === "string" ? `/users/${encodeURIComponent(r.talent_id)}` : undefined }, { key: "opportunity.title", label: "Opportunity", href: (r) => typeof r.opportunity_id === "string" ? `/listings/${encodeURIComponent(r.opportunity_id)}` : undefined }, { key: "current_stage", label: "Stage", format: "status" }, { key: "ai_match_score", label: "Recorded match score" }, { key: "applied_at", label: "Applied", format: "date" }],
+    filters: [{ key: "stage", label: "Stage", options: ["New", "Shortlisted", "Interview", "Offer", "Hired", "Rejected"] }],
+    note: "Read-only oversight. Application stage changes and employer outreach are not implemented in the admin API.",
+  },
+  placements: {
+    title: "Recorded hires & placements", endpoint: "/placements", envelope: "placements", permission: "recruitment.view", alternativePermission: "placements.manage",
+    paginated: true,
+    fields: [{ key: "talent.name", label: "Candidate" }, { key: "opportunity.title", label: "Opportunity" }, { key: "opportunity.external_company_name", label: "External company" }, { key: "current_stage", label: "Stage", format: "status" }, { key: "hired_at", label: "Hired at", format: "date" }],
+    note: "These are applications whose recorded stage is Hired. Engagement completion, employment conversion, supervisor allocation and payment status are not supplied by this endpoint.",
+  },
+  workspaces: {
+    title: "SquadCot workspaces", endpoint: "/workspaces", envelope: "workspaces", permission: "workspaces.view",
+    paginated: true, search: true, detailPath: "/workspaces",
+    fields: [{ key: "name", label: "Workspace" }, { key: "company_name", label: "Company" }, { key: "plan_tier", label: "Plan" }, { key: "seats_used", label: "Seats used" }, { key: "seat_quota", label: "Seat quota" }, { key: "status", label: "Status", format: "status" }, { key: "last_synced_at", label: "Last synced", format: "date" }],
+    filters: [{ key: "status", label: "Status", options: ["Active", "Suspended", "Over_Quota", "Provisioning_Error"] }],
+    note: "Member lists, projects, reports, onboarding and individual access issues are not exposed by the admin API.",
+  },
+  mentors: {
+    title: "Mentor directory", endpoint: "/mentors", envelope: "mentors", permission: "mentors.manage", paginated: true, search: true,
+    fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "status", label: "Account status", format: "status" }, { key: "createdAt", label: "Registered", format: "date" }],
+    note: "Bookings, actual availability, ratings, assigned mentees and payouts are unavailable. The endpoint's baseline assignment counts are deliberately not displayed.",
+  },
+  supervisors: {
+    title: "Supervisor directory", endpoint: "/supervisors", envelope: "supervisors", permission: "supervisors.manage", paginated: true, search: true,
+    fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "status", label: "Account status", format: "status" }, { key: "createdAt", label: "Registered", format: "date" }],
+    note: "Allocation requests, actual student counts, invitations and supervisor actions are unavailable. The endpoint's baseline student counts are deliberately not displayed.",
+  },
+  plans: {
+    title: "Subscription plans", endpoint: "/plans", envelope: "plans", permission: "finance.view",
+    fields: [{ key: "name", label: "Plan" }, { key: "audience", label: "Audience" }, { key: "priceMonthly", label: "Monthly price", format: "money" }, { key: "currency", label: "Currency" }, { key: "status", label: "Status", format: "status" }, { key: "entitlements", label: "Configured entitlements" }],
+    note: "Read-only backend plan configuration. Price edits, plan assignment and entitlement changes are not implemented in the admin API.",
+  },
+  transactions: {
+    title: "Transaction ledger", endpoint: "/finance/transactions", envelope: "transactions", permission: "finance.view", paginated: true, search: true,
+    fields: [{ key: "id", label: "Transaction" }, { key: "payer", label: "Payer" }, { key: "payee", label: "Payee" }, { key: "category", label: "Category" }, { key: "gross", label: "Gross", format: "money" }, { key: "fee", label: "Fee", format: "money" }, { key: "net", label: "Net", format: "money" }, { key: "currency", label: "Currency" }, { key: "provider", label: "Provider" }, { key: "providerRef", label: "Provider reference" }, { key: "status", label: "Status", format: "status" }, { key: "createdAt", label: "Created", format: "date" }],
+    filters: [{ key: "status", label: "Status", options: ["Successful", "Failed", "Pending", "Refunded", "Disputed", "Reversed"] }],
+    note: "Refunds, receipt generation, payouts, escrow and wallet actions have no admin endpoints and are unavailable.",
+  },
+  reconciliation: {
+    title: "Payment reconciliation", endpoint: "/finance/reconciliation", envelope: "reconciliations", permission: "finance.view", paginated: true,
+    fields: [{ key: "id", label: "Record" }, { key: "transactionId", label: "Transaction" }, { key: "provider", label: "Provider" }, { key: "discrepancyType", label: "Discrepancy" }, { key: "ledgerAmount", label: "Ledger amount", format: "money" }, { key: "gatewayAmount", label: "Gateway amount", format: "money" }, { key: "variance", label: "Variance", format: "money" }, { key: "currency", label: "Currency" }, { key: "status", label: "Resolution", format: "status" }, { key: "detectedAt", label: "Detected", format: "date" }],
+    filters: [{ key: "status", label: "Status", options: ["Unresolved", "Settled", "Written_Off", "Escalated"] }],
+  },
+  audit: {
+    title: "Audit logs", endpoint: "/audit-logs", envelope: "logs", permission: "audit.view", paginated: true, search: true,
+    fields: [{ key: "actorName", label: "Actor" }, { key: "action", label: "Action" }, { key: "entityType", label: "Entity type" }, { key: "entityId", label: "Entity ID" }, { key: "outcome", label: "Outcome", format: "status" }, { key: "reason", label: "Reason" }, { key: "createdAt", label: "Recorded", format: "date" }],
+  },
+  admins: {
+    title: "Admin users & roles", endpoint: "/settings/admins", envelope: "admins", permission: "system.manage",
+    fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "roleId", label: "Role" }, { key: "mfaEnabled", label: "MFA enabled" }, { key: "status", label: "Status", format: "status" }, { key: "lastActiveAt", label: "Last active", format: "date" }],
+    note: "Administrator invitations are supported. Editing an existing administrator's role and revoking all sessions are not implemented.",
+  },
+  features: {
+    title: "Feature availability", endpoint: "/settings/features", envelope: "flags", permission: "system.manage",
+    fields: [{ key: "name", label: "Feature" }, { key: "key", label: "Key" }, { key: "area", label: "Area" }, { key: "state", label: "State", format: "status" }, { key: "isLocked", label: "Locked" }, { key: "note", label: "Note" }],
+  },
+} satisfies Record<string, ResourceDefinition>;
+
+export async function fetchCollection(resource: ResourceDefinition, params: QueryParams = {}): Promise<CollectionResult> {
+  const response = await apiClient.get<unknown>(resource.endpoint, { params });
+  if (!isRecord(response) || response.success !== true) invalidResponse(resource.endpoint);
+  const records = response[resource.envelope];
+  if (!Array.isArray(records) || !records.every((record) => isRecord(record) && recordId(record))) {
+    invalidResponse(resource.endpoint);
   }
-
-  if (typeof res === "object" && !Array.isArray(res)) {
-    const rec = res as Record<string, unknown>;
-
-    // 1. Explicit envelopeKey match
-    if (envelopeKey && rec[envelopeKey] !== undefined) {
-      return rec[envelopeKey] as T;
-    }
-
-    // 2. Standard JSON API envelope: { data: T }
-    if ("data" in rec && rec.data !== undefined) {
-      return rec.data as T;
-    }
-
-    // 3. Auto-detect common collection array keys
-    const candidateKeys = [
-      "queue",
-      "users",
-      "companies",
-      "verificationRequests",
-      "verifications",
-      "listings",
-      "applications",
-      "placements",
-      "workspaces",
-      "plans",
-      "admins",
-      "flags",
-      "transactions",
-      "audit",
-      "items",
-      "results",
-      "records",
-    ];
-    for (const k of candidateKeys) {
-      if (Array.isArray(rec[k])) {
-        return rec[k] as T;
-      }
-    }
-  }
-
-  return res as T;
+  if (!resource.paginated) return { records };
+  const pagination = response.pagination;
+  if (!isRecord(pagination) || !Number.isInteger(pagination.page) || !Number.isInteger(pagination.total) ||
+      !Number.isInteger(pagination.totalPages) || Number(pagination.page) < 1 ||
+      Number(pagination.total) < 0 || Number(pagination.totalPages) < 1) invalidResponse(resource.endpoint);
+  return { records, pagination: { page: Number(pagination.page), total: Number(pagination.total), totalPages: Number(pagination.totalPages) } };
 }
 
-export const adminService = {
-  // Executive Dashboard & Analytics Engine
-  dashboard: async (params?: { refresh?: boolean }): Promise<DashboardOverview> => {
-    try {
-      const res = await fetchEndpoint<DashboardOverview>("/dashboard", undefined, {
-        params: params?.refresh ? { refresh: "true" } : undefined,
-        silentErrorToast: true,
-      });
-      if (res && res.kpis) {
-        return res;
-      }
-      return {
-        kpis: {
-          totalTalents: 20132,
-          activeEmployers: 318,
-          liveListings: 838,
-          totalApplications: 6110,
-          placedInterns: 83,
-          activeWorkspaces: 229,
-          mrr: 12960,
-          pendingReconciliations: 1,
-        },
-        charts: {
-          growthSeries: GROWTH_SERIES,
-          revenueSeries: REVENUE_SERIES,
-          workspaceActivitySeries: WORKSPACE_ACTIVITY_SERIES,
-          importHealthSeries: IMPORT_HEALTH_SERIES,
-          recruitmentFunnel: RECRUITMENT_FUNNEL,
-          outcomeFunnel: OUTCOME_FUNNEL,
-          sourcePerformance: SOURCE_PERFORMANCE,
-        },
-        healthServices: HEALTH_SERVICES,
-      };
-    } catch {
-      return {
-        kpis: {
-          totalTalents: 20132,
-          activeEmployers: 318,
-          liveListings: 838,
-          totalApplications: 6110,
-          placedInterns: 83,
-          activeWorkspaces: 229,
-          mrr: 12960,
-          pendingReconciliations: 1,
-        },
-        charts: {
-          growthSeries: GROWTH_SERIES,
-          revenueSeries: REVENUE_SERIES,
-          workspaceActivitySeries: WORKSPACE_ACTIVITY_SERIES,
-          importHealthSeries: IMPORT_HEALTH_SERIES,
-          recruitmentFunnel: RECRUITMENT_FUNNEL,
-          outcomeFunnel: OUTCOME_FUNNEL,
-          sourcePerformance: SOURCE_PERFORMANCE,
-        },
-        healthServices: HEALTH_SERVICES,
-      };
-    }
-  },
+export async function fetchDetail(endpoint: string, envelope: string): Promise<AdminRecord> {
+  const response = await apiClient.get<unknown>(endpoint);
+  if (!isRecord(response) || response.success !== true || !isRecord(response[envelope]) ||
+      !recordId(response[envelope])) invalidResponse(endpoint);
+  return response[envelope];
+}
 
-  // People & Organizations
-  users: async (): Promise<PlatformUser[]> => {
-    try {
-      const res = await fetchEndpoint<PlatformUser[]>("/users", "users", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return USERS;
-    } catch {
-      return USERS;
-    }
-  },
+/** Companies/workspaces have no detail endpoint. Read the actual paginated directory, never a fixture. */
+export async function findDirectoryRecord(resource: ResourceDefinition, id: string): Promise<AdminRecord> {
+  if (!id) throw new Error("A record ID is required.");
+  let page = 1;
+  while (true) {
+    const result = await fetchCollection(resource, { page, limit: 100 });
+    const record = result.records.find((entry) => recordId(entry) === id);
+    if (record) return record;
+    if (!result.pagination || page >= result.pagination.totalPages) break;
+    page++;
+  }
+  throw new Error(`The requested ${resource.title.toLowerCase()} record was not found.`);
+}
 
-  companies: async (): Promise<Company[]> => {
-    try {
-      const res = await fetchEndpoint<Company[]>("/companies", "companies", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return COMPANIES;
-    } catch {
-      return COMPANIES;
-    }
-  },
+export async function mutateAdmin(endpoint: string, payload: AdminRecord, method: "post" | "patch" = "post"): Promise<AdminRecord> {
+  const response = await apiClient[method]<unknown>(endpoint, payload);
+  if (!isRecord(response) || response.success !== true) invalidResponse(endpoint);
+  return response;
+}
 
-  verificationRequests: async (): Promise<VerificationRequest[]> => {
-    try {
-      const res = await fetchEndpoint<VerificationRequest[]>("/verification", "queue", {
-        silentErrorToast: true,
-      });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return VERIFICATION_REQUESTS;
-    } catch {
-      return VERIFICATION_REQUESTS;
-    }
-  },
-
-  mentors: async () => {
-    try {
-      const res = await fetchEndpoint<{ mentors: Mentor[]; bookings: MentorBooking[] }>("/mentors", "mentors", {
-        silentErrorToast: true,
-      });
-      if (res && Array.isArray(res.mentors) && res.mentors.length > 0) return res;
-      return { mentors: MENTORS, bookings: MENTOR_BOOKINGS };
-    } catch {
-      return { mentors: MENTORS, bookings: MENTOR_BOOKINGS };
-    }
-  },
-
-  supervisors: async () => {
-    try {
-      const res = await fetchEndpoint<{ supervisors: Supervisor[]; requests: SupervisorRequest[] }>(
-        "/supervisors",
-        "supervisors",
-        { silentErrorToast: true },
-      );
-      if (res && Array.isArray(res.supervisors) && res.supervisors.length > 0) return res;
-      return { supervisors: SUPERVISORS, requests: SUPERVISOR_REQUESTS };
-    } catch {
-      return { supervisors: SUPERVISORS, requests: SUPERVISOR_REQUESTS };
-    }
-  },
-
-  access: async () => {
-    try {
-      return await fetchEndpoint<{ cases: AccessCase[]; invitations: Invitation[] }>("/access", "access", {
-        silentErrorToast: true,
-      });
-    } catch {
-      return { cases: ACCESS_CASES, invitations: INVITATIONS };
-    }
-  },
-
-  // Jobs, Candidates & Placements
-  listings: async (): Promise<Listing[]> => {
-    try {
-      const res = await fetchEndpoint<Listing[]>("/listings", "listings", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return LISTINGS;
-    } catch {
-      return LISTINGS;
-    }
-  },
-
-  applications: async (): Promise<Application[]> => {
-    try {
-      const res = await fetchEndpoint<Application[]>("/applications", "applications", {
-        silentErrorToast: true,
-      });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return APPLICATIONS;
-    } catch {
-      return APPLICATIONS;
-    }
-  },
-
-  placements: async (): Promise<Placement[]> => {
-    try {
-      const res = await fetchEndpoint<Placement[]>("/placements", "placements", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return PLACEMENTS;
-    } catch {
-      return PLACEMENTS;
-    }
-  },
-
-  talentOversight: async () => {
-    try {
-      return await fetchEndpoint<{ evidence: EvidenceItem[]; readiness: ReadinessRecord[] }>(
-        "/talent-oversight",
-        undefined,
-        { silentErrorToast: true },
-      );
-    } catch {
-      return { evidence: EVIDENCE, readiness: READINESS };
-    }
-  },
-
-  // SquadCot Workspaces & Activity
-  workspaces: async (): Promise<Workspace[]> => {
-    try {
-      const res = await fetchEndpoint<Workspace[]>("/workspaces", "workspaces", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return WORKSPACES;
-    } catch {
-      return WORKSPACES;
-    }
-  },
-
-  workspaceDetail: async (workspaceId?: string) => {
-    try {
-      return await fetchEndpoint<{
-        members: WorkspaceMember[];
-        projects: WorkspaceProject[];
-        reports: WorkspaceReport[];
-        onboarding: OnboardingRecord[];
-        issues: WorkspaceAccessIssue[];
-      }>(workspaceId ? `/workspaces/${workspaceId}/detail` : "/workspaces/detail", undefined, {
-        silentErrorToast: true,
-      });
-    } catch {
-      return {
-        members: WORKSPACE_MEMBERS,
-        projects: WORKSPACE_PROJECTS,
-        reports: WORKSPACE_REPORTS,
-        onboarding: ONBOARDING,
-        issues: WORKSPACE_ACCESS_ISSUES,
-      };
-    }
-  },
-
-  // Commercial & Finance
-  plans: async (): Promise<Plan[]> => {
-    try {
-      const res = await fetchEndpoint<Plan[]>("/plans", "plans", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return PLANS;
-    } catch {
-      return PLANS;
-    }
-  },
-
-  subscriptions: async () => {
-    try {
-      return await fetchEndpoint<Subscription[]>("/subscriptions", "subscriptions", {
-        silentErrorToast: true,
-      });
-    } catch {
-      return SUBSCRIPTIONS;
-    }
-  },
-
-  transactions: async (): Promise<Transaction[]> => {
-    try {
-      const res = await fetchEndpoint<Transaction[]>("/finance/transactions", "transactions", {
-        silentErrorToast: true,
-      });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return TRANSACTIONS;
-    } catch {
-      return TRANSACTIONS;
-    }
-  },
-
-  // Integrations & AI Telemetry
-  sources: async () => {
-    try {
-      return await fetchEndpoint<ExternalSource[]>("/integrations/sources", "sources", {
-        silentErrorToast: true,
-      });
-    } catch {
-      return EXTERNAL_SOURCES;
-    }
-  },
-
-  sync: async () => {
-    try {
-      return await fetchEndpoint<{ runs: SyncRun[]; failed: FailedImport[]; duplicates: DuplicateCandidate[] }>(
-        "/integrations/sync",
-        undefined,
-        { silentErrorToast: true },
-      );
-    } catch {
-      return { runs: SYNC_RUNS, failed: FAILED_IMPORTS, duplicates: DUPLICATES };
-    }
-  },
-
-  aiEvents: async () => {
-    try {
-      return await fetchEndpoint<{ events: AIEvent[]; matches: MatchReview[] }>("/ai-usage", undefined, {
-        silentErrorToast: true,
-      });
-    } catch {
-      return { events: AI_EVENTS, matches: MATCH_REVIEWS };
-    }
-  },
-
-  // Operations, Support & Audit
-  actionQueue: async (): Promise<ActionItem[]> => {
-    try {
-      const res = await fetchEndpoint<ActionItem[]>("/overview/action-queue", "actionQueue", {
-        silentErrorToast: true,
-      });
-      if (Array.isArray(res) && res.length > 0) {
-        return res;
-      }
-      return ACTION_QUEUE;
-    } catch {
-      return ACTION_QUEUE;
-    }
-  },
-
-  tickets: async () => {
-    try {
-      return await fetchEndpoint<SupportTicket[]>("/support/tickets", "tickets", {
-        silentErrorToast: true,
-      });
-    } catch {
-      return TICKETS;
-    }
-  },
-
-  disputes: async () => {
-    try {
-      return await fetchEndpoint<Dispute[]>("/disputes", "disputes", {
-        silentErrorToast: true,
-      });
-    } catch {
-      return DISPUTES;
-    }
-  },
-
-  notifications: async () => {
-    try {
-      return await fetchEndpoint<{ templates: NotificationTemplate[]; events: NotificationEvent[] }>(
-        "/notifications",
-        undefined,
-        { silentErrorToast: true },
-      );
-    } catch {
-      return { templates: NOTIFICATION_TEMPLATES, events: NOTIFICATION_EVENTS };
-    }
-  },
-
-  audit: async (): Promise<AuditEvent[]> => {
-    try {
-      const res = await fetchEndpoint<AuditEvent[]>("/audit-logs", "audit", { silentErrorToast: true });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return AUDIT_EVENTS;
-    } catch {
-      return AUDIT_EVENTS;
-    }
-  },
-
-  // Administration & Governance
-  adminUsers: async (): Promise<AdminUserRecord[]> => {
-    try {
-      const res = await fetchEndpoint<AdminUserRecord[]>("/settings/admins", "admins", {
-        silentErrorToast: true,
-      });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return ADMIN_USERS;
-    } catch {
-      return ADMIN_USERS;
-    }
-  },
-
-  featureFlags: async (): Promise<FeatureFlag[]> => {
-    try {
-      const res = await fetchEndpoint<FeatureFlag[]>("/settings/features", "flags", {
-        silentErrorToast: true,
-      });
-      if (Array.isArray(res) && res.length > 0) return res;
-      return FEATURE_FLAGS;
-    } catch {
-      return FEATURE_FLAGS;
-    }
-  },
-
-  // Entity Detail Fetchers
-  getUser: async (id: string): Promise<PlatformUser> => {
-    try {
-      return await fetchEndpoint<PlatformUser>(`/users/${id}`, "user", { silentErrorToast: true });
-    } catch {
-      const found = USERS.find((u) => u.id === id);
-      if (!found) throw new Error(`User ${id} not found`);
-      return found;
-    }
-  },
-
-  getCompany: async (id: string): Promise<Company> => {
-    try {
-      return await fetchEndpoint<Company>(`/companies/${id}`, "company", { silentErrorToast: true });
-    } catch {
-      const found = COMPANIES.find((c) => c.id === id);
-      if (!found) throw new Error(`Company ${id} not found`);
-      return found;
-    }
-  },
-
-  getListing: async (id: string): Promise<Listing> => {
-    try {
-      return await fetchEndpoint<Listing>(`/listings/${id}`, "listing", { silentErrorToast: true });
-    } catch {
-      const found = LISTINGS.find((l) => l.id === id);
-      if (!found) throw new Error(`Listing ${id} not found`);
-      return found;
-    }
-  },
-
-  getVerification: async (id: string): Promise<VerificationRequest> => {
-    try {
-      return await fetchEndpoint<VerificationRequest>(`/verification/${id}`, "verification", {
-        silentErrorToast: true,
-      });
-    } catch {
-      const found = VERIFICATION_REQUESTS.find((v) => v.id === id);
-      if (!found) throw new Error(`Verification request ${id} not found`);
-      return found;
-    }
-  },
-
-  getWorkspace: async (id: string): Promise<Workspace> => {
-    try {
-      return await fetchEndpoint<Workspace>(`/workspaces/${id}`, "workspace", { silentErrorToast: true });
-    } catch {
-      const found = WORKSPACES.find((w) => w.id === id);
-      if (!found) throw new Error(`Workspace ${id} not found`);
-      return found;
-    }
-  },
-
-  getTicket: async (id: string): Promise<SupportTicket> => {
-    try {
-      return await fetchEndpoint<SupportTicket>(`/support/tickets/${id}`, "ticket", {
-        silentErrorToast: true,
-      });
-    } catch {
-      const found = TICKETS.find((t) => t.id === id);
-      if (!found) throw new Error(`Ticket ${id} not found`);
-      return found;
-    }
-  },
-
-  // High-Risk Mutations (Phase 5)
-  updateUserStatus: (
-    userId: string,
-    payload: { status: "Active" | "Pending" | "Restricted" | "Suspended"; reason: string; note?: string },
-  ) => apiClient.post<{ ok: boolean; status: string }>(`/users/${userId}/status`, payload),
-
-  submitVerificationDecision: (
-    verificationId: string,
-    payload: {
-      decision: "Approve" | "Reject" | "Request more info" | "More info requested";
-      reason?: string;
-      note?: string;
-      checklist?: { label: string; status: "Passed" | "Failed" | "Unchecked" }[];
-    },
-  ) => apiClient.post<{ ok: boolean; state: string }>(`/verification/${verificationId}/decision`, payload),
-
-  moderateListing: (
-    listingId: string,
-    payload: {
-      action: "Approve" | "Flag" | "Reject" | "Pause" | "Close" | "Changes requested";
-      reason?: string;
-      note?: string;
-    },
-  ) => apiClient.post<{ ok: boolean; status: string }>(`/listings/${listingId}/moderate`, payload),
-
-  updateFeatureFlag: (
-    key: string,
-    payload: {
-      state: FeatureState;
-      note?: string;
-      reason?: string;
-    },
-  ) => apiClient.patch<{ ok: boolean; key: string; state: FeatureState }>(`/settings/features/${key}`, payload),
-
-  revealPii: (
-    userId: string,
-    payload?: {
-      field?: "email" | "phone" | "all";
-      reason?: string;
-    },
-  ) =>
-    apiClient.post<{ email?: string; phone?: string;[key: string]: unknown }>(
-      `/users/${userId}/reveal-pii`,
-      payload ?? {},
-    ),
-
-  updateAdminRole: (
-    adminId: string,
-    payload: {
-      role: string;
-      note?: string;
-    },
-  ) => apiClient.post<{ ok: boolean }>(`/settings/admins/${adminId}/role`, payload),
-
-  revokeAllSessions: (payload?: { note?: string }) =>
-    apiClient.post<{ ok: boolean; revokedCount?: number }>("/settings/security/revoke-sessions", payload ?? {}),
-};
+export async function fetchHealth(): Promise<AdminRecord> {
+  const response = await apiClient.get<unknown>("/health");
+  if (!isRecord(response) || typeof response.status !== "string" ||
+      typeof response.service !== "string" || typeof response.timestamp !== "string" ||
+      !isRecord(response.dependencies)) invalidResponse("/health");
+  return response;
+}

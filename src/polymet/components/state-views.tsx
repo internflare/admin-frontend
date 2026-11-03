@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils";
 
 export function TableSkeleton({ rows = 6, columns = 5 }: { rows?: number; columns?: number }) {
   return (
-    <div className="divide-y divide-border" aria-busy="true" aria-label="Loading records">
+    <div className="min-w-0 divide-y divide-border overflow-hidden" role="status" aria-busy="true" aria-label="Loading records">
+      <span className="sr-only">Loading records</span>
       {Array.from({ length: rows }).map((_, r) => (
         <div key={r} className="flex items-center gap-4 px-4 py-3">
           {Array.from({ length: columns }).map((__, c) => (
-            <Skeleton key={c} className={cn("h-4", c === 0 ? "w-40" : "flex-1")} />
+            <Skeleton key={c} className={cn("h-4 min-w-0 flex-1", c === 0 && "max-w-40")} />
           ))}
         </div>
       ))}
@@ -20,14 +21,35 @@ export function TableSkeleton({ rows = 6, columns = 5 }: { rows?: number; column
 
 export function PageSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true">
-      <Skeleton className="h-8 w-64" />
+    <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading page">
+      <span className="sr-only">Loading page</span>
+      <Skeleton className="h-8 w-64 max-w-full" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-28" />
         ))}
       </div>
       <Skeleton className="h-72" />
+    </div>
+  );
+}
+
+export function SessionSkeleton({ login = false }: { login?: boolean }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <div aria-hidden="true" className="flex h-16 items-center justify-between border-b px-5 sm:px-8">
+        <Skeleton className="h-8 w-36" /><Skeleton className="size-9 rounded-full" />
+      </div>
+      {login ? (
+        <div role="status" aria-busy="true" aria-label="Loading sign-in" className="mx-auto max-w-sm space-y-6 px-5 py-20">
+          <span className="sr-only">Loading sign-in</span>
+          <Skeleton className="h-8 w-3/4" /><Skeleton className="h-4 w-full" />
+          <Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : (
+        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8"><PageSkeleton /></div>
+      )}
     </div>
   );
 }

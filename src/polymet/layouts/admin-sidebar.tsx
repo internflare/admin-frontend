@@ -10,7 +10,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -54,7 +53,7 @@ export function AdminSidebar() {
   };
 
   // Most-specific match wins so "/listings/moderation" doesn't also highlight "/listings".
-  const allHrefs = ADMIN_NAV.flatMap((s) => s.items.filter((i) => can(i.permission)).map((i) => i.href));
+  const allHrefs = ADMIN_NAV.flatMap((s) => s.items.filter((i) => can(i.permission) || (i.alternativePermission && can(i.alternativePermission))).map((i) => i.href));
   const activeHref = allHrefs
     .filter((href) => isActive(pathname, href))
     .sort((a, b) => b.length - a.length)[0];
@@ -68,7 +67,7 @@ export function AdminSidebar() {
       </SidebarHeader>
       <SidebarContent className="gap-0 py-1" onClickCapture={closeOnNavigate}>
         {ADMIN_NAV.map((section) => {
-          const items = section.items.filter((item) => can(item.permission));
+          const items = section.items.filter((item) => can(item.permission) || (item.alternativePermission && can(item.alternativePermission)));
           if (items.length === 0) return null;
           return (
             <Collapsible key={section.title} defaultOpen className="group/collapsible">
@@ -97,11 +96,6 @@ export function AdminSidebar() {
                                 <span>{item.title}</span>
                               </Link>
                             </SidebarMenuButton>
-                            {item.badge !== undefined && (
-                              <SidebarMenuBadge className="rounded-md bg-primary/10 text-[10px] text-orange-800 dark:text-orange-300">
-                                {item.badge}
-                              </SidebarMenuBadge>
-                            )}
                           </SidebarMenuItem>
                         );
                       })}

@@ -5,7 +5,7 @@
  * 1. Strict `credentials: "include"` on all requests for HTTP-only `admin_session` cookie transmission.
  * 2. Automatic `X-Correlation-ID` generation and propagation for distributed request tracing.
  * 3. Centralized RFC-compliant error mapping with Sonner toast feedback and deduplication.
- * 4. Custom event dispatching on 401 Unauthorized for reactive session termination.
+ * 4. Protected-request 401 events terminate expired sessions; sign-in failures do not.
  */
 
 import { toast } from "sonner";
@@ -75,9 +75,9 @@ function showDeduplicatedToast(
 
 /**
  * Maps HTTP status codes to user-friendly Sonner toast notifications.
- * Dispatches an event on 401 so the auth provider can react immediately.
+ * Protected-request 401s notify the auth provider even when their toast is silent.
  */
-export function handleApiError(error: unknown, silent = false): ApiError {
+export function handleApiError(error: unknown, silent = false, invalidateSession = true): ApiError {
   let apiError: ApiError;
 
   if (error instanceof ApiError) {
@@ -95,6 +95,9 @@ export function handleApiError(error: unknown, silent = false): ApiError {
     apiError = new ApiError(500, "Unknown Error", { message: String(error) });
   }
 
+  if (apiError.status === 401 && invalidateSession && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("internflare:unauthorized", { detail: { apiError } }));
+  }
   if (silent) return apiError;
 
   const { status, data, correlationId } = apiError;
@@ -114,10 +117,11 @@ export function handleApiError(error: unknown, silent = false): ApiError {
       break;
     }
     case 401: {
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("internflare:unauthorized", { detail: { apiError } }));
+      if (invalidateSession) {
+        showDeduplicatedToast("401_unauthorized", "warning", "Session Expired", "Please sign in again to continue.");
+      } else {
+        showDeduplicatedToast(dedupeKey, "error", "Sign-in Request Failed", detailMsg || apiError.message);
       }
-      showDeduplicatedToast("401_unauthorized", "warning", "Session Expired", "Please sign in again to continue.");
       break;
     }
     case 403: {
@@ -163,11 +167,11 @@ export function handleApiError(error: unknown, silent = false): ApiError {
       break;
     }
     default: {
-      if (status >= 500) {
+      if (status >= 400) {
         showDeduplicatedToast(
           dedupeKey,
           "error",
-          "Server Error",
+          status >= 500 ? "Server Error" : "Request Failed",
           `${detailMsg || "An unexpected error occurred."}${correlationId ? ` (Ref: ${correlationId})` : ""}`,
         );
       }
@@ -210,6 +214,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   const { params, silentErrorToast = false, body, headers: customHeaders, ...fetchInit } = options;
   const url = buildUrl(endpoint, params);
   const correlationId = generateCorrelationId();
+  const invalidateSession = !["/auth/request-code", "/auth/verify-code", "/auth/me"].includes(endpoint.split("?")[0]);
 
   const headers = new Headers(customHeaders);
   if (!headers.has("Accept")) {
@@ -256,7 +261,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       }
 
       const apiError = new ApiError(response.status, response.statusText, errorData, responseCorrelationId);
-      throw handleApiError(apiError, silentErrorToast);
+      throw handleApiError(apiError, silentErrorToast, invalidateSession);
     }
 
     if (response.status === 204) {
@@ -265,7 +270,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
     const contentType = response.headers.get("Content-Type") || "";
     if (contentType.includes("application/json")) {
-      return (await response.json()) as T;
+      const result = await response.json();
+      if (result && typeof result === "object" && (result.success === false || result.ok === false)) {
+        throw handleApiError(new ApiError(400, "Request Failed", result, responseCorrelationId), silentErrorToast, invalidateSession);
+      }
+      return result as T;
     }
 
     return (await response.text()) as unknown as T;
@@ -273,7 +282,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     if (err instanceof ApiError) {
       throw err;
     }
-    throw handleApiError(err, silentErrorToast);
+    throw handleApiError(err, silentErrorToast, invalidateSession);
   }
 }
 

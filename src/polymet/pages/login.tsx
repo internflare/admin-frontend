@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { InternflareLogo } from "@/polymet/layouts/admin-sidebar";
 import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import { LoginCodeStep, LoginEmailStep } from "@/polymet/components/otp-login-steps";
+import { SessionSkeleton } from "@/polymet/components/state-views";
 
 export default function LoginPage() {
   const { admin, isLoadingSession, requestCode, verifyCode } = useAdminAuth();
@@ -14,11 +15,7 @@ export default function LoginPage() {
   const from = (location.state as { from?: string } | null)?.from ?? "/";
 
   if (isLoadingSession) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <SessionSkeleton login />;
   }
 
   if (admin) return <Navigate to={from} replace />;
@@ -34,7 +31,7 @@ export default function LoginPage() {
         <div className="relative max-w-md space-y-4">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#fd7128]">Ecosystem control centre</p>
           <h2 className="text-3xl font-semibold leading-tight">One console for internflareJobs, SquadCot and the platform behind them.</h2>
-          <p className="text-sm text-white/60">Access is limited to invited administrators. Every sign-in and sensitive action is recorded in the audit log.</p>
+          <p className="text-sm text-white/60">Access is limited to active administrator accounts verified against the database.</p>
         </div>
         <ul className="relative space-y-2 text-xs text-white/60">
           <li className="flex items-center gap-2"><ShieldCheckIcon className="size-4 text-[#fd7128]" /> Passwordless sign-in with single-use codes</li>
@@ -71,14 +68,14 @@ export default function LoginPage() {
                   navigate(from, { replace: true });
                   return null;
                 }
-                return { error: res.error, mustRestart: res.attemptsLeft <= 0 };
+                return { error: res.error, mustRestart: res.locked || res.attemptsLeft === 0 };
               }}
             />
           )}
           <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
             <p className="font-medium text-foreground">Passwordless Email Delivery</p>
             <p className="mt-0.5 leading-relaxed">
-              Single-use 6-digit codes are delivered to registered administrator email addresses and expire after 10 minutes.
+              Single-use 6-digit codes are emailed only after an active administrator account is found in the database. Codes expire after 5 minutes.
             </p>
           </div>
           <p className="text-center text-[11px] text-muted-foreground">Need access? Ask a super administrator to send you an invitation.</p>

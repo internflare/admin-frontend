@@ -1,0 +1,13 @@
+# Cloudflare Workers static-assets hosting for the Vite build in ./dist.
+name = "internflare-admin-frontend"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./dist"
+# React Router owns client routes, so unknown paths serve index.html.
+not_found_handling = "single-page-application"
+
+[[routes]]
+pattern = "admin.internflare.net"
+zone_name = "internflare.net"
+custom_domain = true

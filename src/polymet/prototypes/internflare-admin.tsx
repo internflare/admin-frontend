@@ -4,7 +4,7 @@ import { AdminRoleProvider } from "@/polymet/components/admin-role-provider";
 import { AdminLayout } from "@/polymet/layouts/admin-layout";
 import { AdminAuthProvider, useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import LoginPage from "@/polymet/pages/login";
-import { EmptyState } from "@/polymet/components/state-views";
+import { EmptyState, SessionSkeleton } from "@/polymet/components/state-views";
 import ExecutiveDashboardPage from "@/polymet/pages/executive-dashboard";
 import OperationalHealthPage from "@/polymet/pages/operational-health";
 import ActionQueuePage from "@/polymet/pages/action-queue";
@@ -47,14 +47,7 @@ function RequireAdmin() {
   const location = useLocation();
 
   if (isLoadingSession) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-xs text-muted-foreground animate-pulse">Verifying secure administrator session…</p>
-        </div>
-      </div>
-    );
+    return <SessionSkeleton />;
   }
 
   if (!admin) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;

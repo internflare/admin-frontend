@@ -18,6 +18,7 @@ export function useAdminQuery<T>(fetcher: () => Promise<T>): AdminQueryState<T> 
     let active = true;
     setLoading(true);
     setError(null);
+    setData(undefined);
     fetcher()
       .then((result) => {
         if (active) setData(result);
@@ -32,8 +33,7 @@ export function useAdminQuery<T>(fetcher: () => Promise<T>): AdminQueryState<T> 
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt]);
+  }, [fetcher, attempt]);
 
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
 

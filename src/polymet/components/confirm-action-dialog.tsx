@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertTriangleIcon, Loader2Icon, ShieldAlertIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,11 +35,12 @@ interface ConfirmActionDialogProps {
   reasonOptions?: string[];
   requireAcknowledgement?: boolean;
   onConfirm: (payload: ConfirmActionPayload) => void | Promise<void>;
+  children?: ReactNode;
 }
 
 export function ConfirmActionDialog({
   open, onOpenChange, title, description, target, consequences = [], confirmLabel = "Confirm",
-  destructive, requireReason = true, reasonOptions, requireAcknowledgement, onConfirm,
+  destructive, requireReason = true, reasonOptions, requireAcknowledgement, onConfirm, children,
 }: ConfirmActionDialogProps) {
   const { role } = useAdminRole();
   const { admin } = useAdminAuth();
@@ -47,6 +48,7 @@ export function ConfirmActionDialog({
   const [note, setNote] = useState("");
   const [ack, setAck] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const reasonValid = !requireReason || (reasonOptions ? reason.length > 0 : note.trim().length >= 10);
   const canSubmit = reasonValid && (!requireAcknowledgement || ack) && !isSubmitting;
@@ -56,6 +58,7 @@ export function ConfirmActionDialog({
     setNote("");
     setAck(false);
     setIsSubmitting(false);
+    setError(null);
   };
 
   return (
@@ -92,17 +95,19 @@ export function ConfirmActionDialog({
             e.preventDefault();
             if (!canSubmit) return;
             setIsSubmitting(true);
+            setError(null);
             try {
               await onConfirm({ reason, note });
               reset();
               onOpenChange(false);
-            } catch {
-              // Failed request toast is handled by apiClient; dialog remains open for correction
+            } catch (failure) {
+              setError(failure instanceof Error ? failure.message : "The backend did not confirm this change.");
             } finally {
               setIsSubmitting(false);
             }
           }}
         >
+          {children}
           {target && (
             <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
               <span className="text-xs text-muted-foreground">Affected record</span>
@@ -162,8 +167,9 @@ export function ConfirmActionDialog({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Recorded in the audit log as <span className="font-medium text-foreground">{admin?.name ?? "Administrator"}</span> ({role.label}) with timestamp and reason.
+            This request will be sent as <span className="font-medium text-foreground">{admin?.name ?? "Administrator"}</span> ({role.label}). A successful backend mutation records its audit event.
           </p>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
