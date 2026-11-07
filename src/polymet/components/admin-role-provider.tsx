@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ADMIN_ROLES,
   type AdminRoleDefinition,
@@ -39,6 +46,7 @@ export function AdminRoleProvider({
   const [roleId, setRoleIdState] = useState<AdminRoleId>(initialRole);
   const [customPermissions, setCustomPermissions] = useState<Permission[]>([]);
 
+  // Updates the role ID and resets custom permissions when the role changes.
   const setRoleId = useCallback((id: AdminRoleId) => {
     setRoleIdState(id);
     setCustomPermissions([]);
@@ -61,7 +69,11 @@ export function AdminRoleProvider({
     };
   }, [roleId, customPermissions, setRoleId, setPermissions]);
 
-  return <AdminRoleContext.Provider value={value}>{children}</AdminRoleContext.Provider>;
+  return (
+    <AdminRoleContext.Provider value={value}>
+      {children}
+    </AdminRoleContext.Provider>
+  );
 }
 
 export function useAdminRole() {

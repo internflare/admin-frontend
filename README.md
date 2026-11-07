@@ -1,5 +1,14 @@
 # Welcome to your Polymet AI project
 
+## Browser security
+
+The deployed `_headers` Content Security Policy permits same-origin scripts only
+and blocks inline/eval scripts, executable objects, iframes, base tags and
+cross-origin form submissions. Keep record content as escaped React text.
+Document links accept HTTP(S) only, and chart style blocks do not inject HTML.
+Cloudflare hosting must serve these headers; Vite development/preview does not
+apply `_headers`. This security hardening does not add PWA support to the admin.
+
 ## Loading states
 
 Session checks, page details, table fetches, dashboard totals and search
@@ -29,16 +38,18 @@ Paths below are relative to that gateway base:
 | Surface | Backend endpoints |
 |---------|-------------------|
 | Current dashboard totals | Paginated directory queries for talent, verified companies, published listings, applications, recorded hires, active workspaces and unresolved reconciliations; only authorised modules are requested |
+| Dashboard & analytics charts | `GET /dashboard?range=30d`, `GET /analytics?range=7d/30d/90d/1y`, `POST /analytics/export` (CSV, `analytics.export`) |
 | Users | `GET /users`, `GET /users/:id`, `POST /users/:id/status`, `POST /users/:id/reveal-pii` |
 | Companies & verification | `GET /companies`, `GET /verification`, `GET /verification/:id`, `POST /verification/:id/checklist`, `POST /verification/:id/decision` |
 | Listings & recruitment | `GET /listings`, `GET /listings/:id`, `POST /listings/:id/moderate`, `GET /applications`, `GET /placements` |
 | Workspaces & coordinators | `GET /workspaces`, `POST /workspaces/:id/re-provision`, `GET /mentors`, `GET /supervisors` |
+| Bug reports & ideas | `GET /feedback`, `GET /feedback/:id`, `POST /feedback/:id/status` (`support.view` to read, `support.manage` to triage) |
 | Commercial | `GET /plans`, `GET /finance/transactions`, `GET /finance/reconciliation`, `POST /finance/reconciliation/:id/settle` |
 | Audit & settings | `GET /audit-logs`, `GET /settings/admins`, `POST /settings/admins/invite`, `GET /settings/features`, `PATCH /settings/features/:key` |
 | Health | `GET /health` (admin-service dependency checks only) |
 
 Collections validate the backend's named envelope (`users`, `companies`,
-`queue`, `listings`, `applications`, `placements`, `workspaces`, `mentors`,
+`queue`, `listings`, `applications`, `placements`, `workspaces`, `feedback`, `mentors`,
 `supervisors`, `plans`, `transactions`, `reconciliations`, `logs`, `admins`,
 `flags`) and, where supported, `pagination.page/total/totalPages`. An empty
 successful collection, unavailable capability, malformed response and failed
@@ -73,9 +84,12 @@ editing. Mentor/supervisor assignment counts and availability are not inferred
 from account status. Placement records are recorded hires, not completed
 engagements or verified employment outcomes.
 
-Historical analytics, funnels, growth comparisons and exports are deliberately
-not rendered: the current backend analytics implementation includes baseline or
-estimated values. Financial records use their actual currency and gross/fee/net
+Charts (bar, area and donut, in `components/admin-charts.tsx` and
+components/analytics-panels.tsx`) are drawn only from the recorded analytics
+snapshot: sign-ups by account type, companies, listings, recruitment activity
+and current stages, payments/subscriptions and feedback. Periods with no records
+show an empty state; there are no growth deltas or inferred conversion rates.
+`Revenue analytics` (`/analytics/commercial`) shows only the finance section. Financial records use their actual currency and gross/fee/net
 fields. There are no fabricated sidebar badges, alert indicators or role-preview
 controls. Detail `.render.tsx` entry points use the authenticated application
 router and the current URL, not hard-coded record IDs; open a real detail URL
@@ -83,7 +97,10 @@ after signing in to inspect a record.
 
 ### Validation
 
-Run `npm run type-check`, `npm run lint`, and `npm run build`.
+Run 
+pm run type-check`, 
+pm run lint`, and 
+pm run build`.
 End-to-end live-data validation additionally requires the gateway,
 admin-service dependencies and an authorised administrator session. A backend
 or session failure is an error state, not permission to substitute data.
@@ -150,7 +167,8 @@ This project is built with:
 
 ## How can I deploy this project?
 
-The admin app is hosted on Cloudflare Workers static assets at `admin.internflare.net`, configured in `wrangler.toml`. Unknown paths fall back to `index.html` for React Router, and `public/_headers` sets asset caching, security headers and `noindex`.
+The admin app is hosted on Cloudflare Workers static assets at `admin.internflare.net`, configured in `wrangler.toml`. Unknown paths fall back to `index.html` for React Router, and `public/_headers` sets asset caching, security headers and 
+oindex`.
 
 Production builds read the committed `.env.production`, which sets `VITE_API_URL=https://api.internflare.net/api/v1/admin`. `VITE_` values are public, so never store secrets in them.
 
@@ -158,11 +176,16 @@ The repository is connected to Cloudflare Workers Builds, so each push to the pr
 
 | Setting | Value |
 |---------|-------|
-| Build command | `npm run build` |
-| Deploy command | `npx wrangler deploy` |
+| Build command | 
+pm run build` |
+| Deploy command | 
+px wrangler deploy` |
 | Root directory | `/` |
 
-The Worker name in the dashboard must match `name` in `wrangler.toml`. To deploy manually instead, run `npx wrangler login` once and then `npm run deploy`.
+The Worker name in the dashboard must match 
+ame` in `wrangler.toml`. To deploy manually instead, run 
+px wrangler login` once and then 
+pm run deploy`.
 
 The custom-domain route sets `zone_name = "internflare.net"` (the parent zone, not `admin.internflare.net`). That zone must be active in the Worker's Cloudflare account and accessible to the build's deployment token. If error 10082 reports that Cloudflare cannot infer the zone, check account ownership and token access. Review only conflicting `admin.internflare.net` DNS records; leave API, mail and unrelated records intact. A dry run does not validate account permissions or custom-domain attachment.
 
@@ -170,15 +193,24 @@ The custom-domain route sets `zone_name = "internflare.net"` (the parent zone, n
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| **Dev** | `npm run dev` | Start the development server with hot reload |
-| **Build** | `npm run build` | Create an optimized production build |
-| **Preview** | `npm run preview` | Serve the production build locally |
-| **Cloudflare Dev** | `npm run cf:dev` | Build and serve `dist/` through the local Cloudflare runtime |
-| **Deploy** | `npm run deploy` | Build and deploy manually to Cloudflare Workers |
-| **Type Check** | `npm run type-check` | Verify TypeScript types without emitting |
-| **Lint** | `npm run lint` | Check code for linting errors |
-| **Lint Fix** | `npm run lint:fix` | Automatically fix linting errors |
-| **Format** | `npm run format` | Format code with Prettier |
+| **Dev** | 
+pm run dev` | Start the development server with hot reload |
+| **Build** | 
+pm run build` | Create an optimized production build |
+| **Preview** | 
+pm run preview` | Serve the production build locally |
+| **Cloudflare Dev** | 
+pm run cf:dev` | Build and serve `dist/` through the local Cloudflare runtime |
+| **Deploy** | 
+pm run deploy` | Build and deploy manually to Cloudflare Workers |
+| **Type Check** | 
+pm run type-check` | Verify TypeScript types without emitting |
+| **Lint** | 
+pm run lint` | Check code for linting errors |
+| **Lint Fix** | 
+pm run lint:fix` | Automatically fix linting errors |
+| **Format** | 
+pm run format` | Format code with Prettier |
 
 ## Library Versions
 

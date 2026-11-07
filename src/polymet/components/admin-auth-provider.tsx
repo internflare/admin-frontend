@@ -9,7 +9,12 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { apiClient, ApiError } from "@/polymet/lib/api-client";
-import { ADMIN_ROLES, PERMISSION_LABELS, type AdminRoleId, type Permission } from "@/polymet/data/admin-roles";
+import {
+  ADMIN_ROLES,
+  PERMISSION_LABELS,
+  type AdminRoleId,
+  type Permission,
+} from "@/polymet/data/admin-roles";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
 
 export interface SignedInAdmin {
@@ -28,7 +33,9 @@ export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RESEND_COOLDOWN_S = 60;
 
 type RequestResult = { ok: true } | { ok: false; error: string };
-type VerifyResult = { ok: true } | { ok: false; error: string; attemptsLeft?: number; locked: boolean };
+type VerifyResult =
+  | { ok: true }
+  | { ok: false; error: string; attemptsLeft?: number; locked: boolean };
 
 interface AdminAuthContextValue {
   admin: SignedInAdmin | null;
@@ -38,29 +45,35 @@ interface AdminAuthContextValue {
   signOut: () => Promise<void>;
 }
 
-const AdminAuthContext = createContext<AdminAuthContextValue | undefined>(undefined);
+const AdminAuthContext = createContext<AdminAuthContextValue | undefined>(
+  undefined,
+);
 
 function isSignedInAdmin(value: unknown): value is SignedInAdmin {
-  return typeof value === "object" && value !== null &&
-    "id" in value && typeof value.id === "string" &&
-    "name" in value && typeof value.name === "string" &&
-    "email" in value && typeof value.email === "string" &&
-    "roleLabel" in value && typeof value.roleLabel === "string" &&
-    "roleId" in value && ADMIN_ROLES.some((role) => role.id === value.roleId) &&
-    "permissions" in value && Array.isArray(value.permissions) &&
-    value.permissions.every((permission: unknown) =>
-      typeof permission === "string" && Object.prototype.hasOwnProperty.call(PERMISSION_LABELS, permission));
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "name" in value &&
+    typeof value.name === "string" &&
+    "email" in value &&
+    typeof value.email === "string" &&
+    "roleLabel" in value &&
+    typeof value.roleLabel === "string" &&
+    "roleId" in value &&
+    ADMIN_ROLES.some((role) => role.id === value.roleId) &&
+    "permissions" in value &&
+    Array.isArray(value.permissions) &&
+    value.permissions.every(
+      (permission: unknown) =>
+        typeof permission === "string" &&
+        Object.prototype.hasOwnProperty.call(PERMISSION_LABELS, permission),
+    )
+  );
 }
 
-/**
- * Live Admin Authentication Provider (Phase 2).
- *
- * Replaces simulated browser timers with real backend authentication endpoints:
- * - Session Hydration: Calls GET /auth/me with credentials: "include" to verify active HTTP-Only cookie.
- * - OTP Dispatch: Calls POST /auth/request-code (delivered exclusively to admin email).
- * - Code Verification: Calls POST /auth/verify-code to establish session.
- * - Sign Out: Calls POST /auth/sign-out and revokes server/cookie credentials.
- */
+// Provides authentication context for admin users, handling session hydration, OTP requests, verification, and sign-out.
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const { setRoleId, setPermissions } = useAdminRole();
   const [admin, setAdmin] = useState<SignedInAdmin | null>(null);
@@ -85,7 +98,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (!isSignedInAdmin(response?.admin)) {
-          throw new Error("The server returned an invalid administrator session.");
+          throw new Error(
+            "The server returned an invalid administrator session.",
+          );
         }
         if (isMounted) {
           setAdmin(response.admin);
@@ -97,7 +112,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
           setPermissions([]);
           if (!(error instanceof ApiError && error.status === 401)) {
             toast.error("Unable to verify your administrator session", {
-              description: error instanceof Error ? error.message : "Please try again.",
+              description:
+                error instanceof Error ? error.message : "Please try again.",
             });
           }
         }
@@ -120,47 +136,67 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
-      window.removeEventListener("internflare:unauthorized", handleUnauthorized);
+      window.removeEventListener(
+        "internflare:unauthorized",
+        handleUnauthorized,
+      );
     };
   }, [applyRole, setPermissions]);
 
   // Request OTP: Dispatches single-use code to work email
-  const requestCode = useCallback(async (rawEmail: string): Promise<RequestResult> => {
-    const email = rawEmail.trim().toLowerCase();
-    try {
-      const response = await apiClient.post<{ success: boolean; message: string }>("/auth/request-code", { email }, { silentErrorToast: true });
-      if (response?.success !== true || typeof response.message !== "string") {
-        throw new Error("The server did not confirm the sign-in code request.");
+  const requestCode = useCallback(
+    async (rawEmail: string): Promise<RequestResult> => {
+      const email = rawEmail.trim().toLowerCase();
+      try {
+        const response = await apiClient.post<{
+          success: boolean;
+          message: string;
+        }>("/auth/request-code", { email }, { silentErrorToast: true });
+        if (
+          response?.success !== true ||
+          typeof response.message !== "string"
+        ) {
+          throw new Error(
+            "The server did not confirm the sign-in code request.",
+          );
+        }
+        toast.info("Check your administrator email", {
+          description: response.message,
+          duration: 7000,
+        });
+        return { ok: true };
+      } catch (err: unknown) {
+        let errorMsg = "Unable to request a sign-in code. Please try again.";
+        if (err instanceof ApiError) {
+          errorMsg = err.data?.message || err.data?.error || err.message;
+        } else if (err instanceof Error) {
+          errorMsg = err.message;
+        }
+        return { ok: false, error: errorMsg };
       }
-      toast.info("Check your administrator email", {
-        description: response.message,
-        duration: 7000,
-      });
-      return { ok: true };
-    } catch (err: unknown) {
-      let errorMsg = "Unable to request a sign-in code. Please try again.";
-      if (err instanceof ApiError) {
-        errorMsg = err.data?.message || err.data?.error || err.message;
-      } else if (err instanceof Error) {
-        errorMsg = err.message;
-      }
-      return { ok: false, error: errorMsg };
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Better Auth sets its HttpOnly session cookie after OTP verification.
   const verifyCode = useCallback(
     async (rawEmail: string, code: string): Promise<VerifyResult> => {
       const email = rawEmail.trim().toLowerCase();
       try {
-        const res = await apiClient.post<{ success: boolean; admin: unknown }>("/auth/verify-code", {
-          email,
-          code,
-        }, { silentErrorToast: true });
+        const res = await apiClient.post<{ success: boolean; admin: unknown }>(
+          "/auth/verify-code",
+          {
+            email,
+            code,
+          },
+          { silentErrorToast: true },
+        );
 
         const signedIn = res.admin;
         if (res.success !== true || !isSignedInAdmin(signedIn)) {
-          throw new Error("The server returned an invalid administrator session.");
+          throw new Error(
+            "The server returned an invalid administrator session.",
+          );
         }
         applyRole(signedIn);
         setAdmin(signedIn);
@@ -175,12 +211,20 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
         if (err instanceof ApiError) {
           message = err.data?.message || err.data?.error || err.message;
-          attemptsLeft = typeof err.data?.remainingAttempts === "number" ? err.data.remainingAttempts : undefined;
+          attemptsLeft =
+            typeof err.data?.remainingAttempts === "number"
+              ? err.data.remainingAttempts
+              : undefined;
         } else if (err instanceof Error) {
           message = err.message;
         }
 
-        return { ok: false, error: message, attemptsLeft, locked: err instanceof ApiError && err.status === 429 };
+        return {
+          ok: false,
+          error: message,
+          attemptsLeft,
+          locked: err instanceof ApiError && err.status === 429,
+        };
       }
     },
     [applyRole],
@@ -192,7 +236,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       await apiClient.post("/auth/sign-out", {});
       setAdmin(null);
       setPermissions([]);
-      toast.info("Signed out", { description: "Your administrator session has ended." });
+      toast.info("Signed out", {
+        description: "Your administrator session has ended.",
+      });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setAdmin(null);
@@ -207,11 +253,16 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     [admin, isLoadingSession, requestCode, verifyCode, signOut],
   );
 
-  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
+  return (
+    <AdminAuthContext.Provider value={value}>
+      {children}
+    </AdminAuthContext.Provider>
+  );
 }
 
 export function useAdminAuth() {
   const context = useContext(AdminAuthContext);
-  if (!context) throw new Error("useAdminAuth must be used within AdminAuthProvider");
+  if (!context)
+    throw new Error("useAdminAuth must be used within AdminAuthProvider");
   return context;
 }

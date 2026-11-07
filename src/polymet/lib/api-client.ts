@@ -2,7 +2,7 @@
  * Internflare Admin API Client (Phase 1 Foundation)
  *
  * Enforces:
- * 1. Strict `credentials: "include"` on all requests for HTTP-only `admin_session` cookie transmission.
+ * 1. Strict `credentials: "include"` on all requests for HTTP-only `internflare-admin.session_token` cookie transmission.
  * 2. Automatic `X-Correlation-ID` generation and propagation for distributed request tracing.
  * 3. Centralized RFC-compliant error mapping with Sonner toast feedback and deduplication.
  * 4. Protected-request 401 events terminate expired sessions; sign-in failures do not.
@@ -241,7 +241,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       ...fetchInit,
       headers,
       body: serializedBody,
-      credentials: "include", // Essential: Transmits & captures the admin_session HTTP-Only cookie
+      credentials: "include", // Essential: Transmits & captures the internflare-admin.session_token HTTP-only cookie
     });
 
     const responseCorrelationId = response.headers.get("X-Correlation-ID") || correlationId;

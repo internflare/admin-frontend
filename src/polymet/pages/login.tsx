@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { InternflareLogo } from "@/polymet/layouts/admin-sidebar";
 import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import { LoginCodeStep, LoginEmailStep } from "@/polymet/components/otp-login-steps";
-import { SessionSkeleton } from "@/polymet/components/state-views";
+import { SessionLoading } from "@/polymet/components/state-views";
 
 export default function LoginPage() {
   const { admin, isLoadingSession, requestCode, verifyCode } = useAdminAuth();
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const from = (location.state as { from?: string } | null)?.from ?? "/";
 
   if (isLoadingSession) {
-    return <SessionSkeleton login />;
+    return <SessionLoading />;
   }
 
   if (admin) return <Navigate to={from} replace />;

@@ -34,26 +34,32 @@ export function FieldValue({ record, field }: { record: AdminRecord; field: Reso
   return href ? <Link className="hover:underline" to={href}>{content}</Link> : <span className="break-words">{content}</span>;
 }
 
-export function ResourcePage({ resource, initialParams = {}, title, actions }: {
+export function ResourcePage({ resource, initialParams = {}, title, actions, summary, rowActions }: {
   resource: ResourceDefinition;
   initialParams?: QueryParams;
   title?: string;
   actions?: ReactNode;
+  summary?: ReactNode;
+  /** Page-specific row actions; `refresh` reloads the current page of records. */
+  rowActions?: (record: AdminRecord, refresh: () => void) => ReactNode;
 }) {
   const { can } = useAdminRole();
   const [urlParams] = useSearchParams();
   const permission = !can(resource.permission) && resource.alternativePermission ? resource.alternativePermission : resource.permission;
-  return <PermissionGuard permission={permission}><ResourceContent key={`${resource.endpoint}:${JSON.stringify(initialParams)}:${urlParams.toString()}`} resource={resource} initialParams={initialParams} title={title} actions={actions} /></PermissionGuard>;
+  return <PermissionGuard permission={permission}><ResourceContent key={`${resource.endpoint}:${JSON.stringify(initialParams)}:${urlParams.toString()}`} resource={resource} initialParams={initialParams} title={title} actions={actions} summary={summary} rowActions={rowActions} /></PermissionGuard>;
 }
 
-function ResourceContent({ resource, initialParams, title, actions }: {
-  resource: ResourceDefinition; initialParams: QueryParams; title?: string; actions?: ReactNode;
+function ResourceContent({ resource, initialParams, title, actions, summary, rowActions }: {
+  resource: ResourceDefinition; initialParams: QueryParams; title?: string; actions?: ReactNode; summary?: ReactNode;
+  rowActions?: (record: AdminRecord, refresh: () => void) => ReactNode;
 }) {
   const [page, setPage] = useState(1);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(resource.search ? searchParams.get("search") ?? "" : "");
   const [query, setQuery] = useState(search);
-  const [filters, setFilters] = useState<QueryParams>({});
+  const [filters, setFilters] = useState<QueryParams>(() => Object.fromEntries(
+    (resource.filters ?? []).filter((filter) => filter.defaultValue && initialParams[filter.key] === undefined).map((filter) => [filter.key, filter.defaultValue]),
+  ));
   const [selected, setSelected] = useState<AdminRecord | null>(null);
   const [resolution, setResolution] = useState("Settled");
   const [featureState, setFeatureState] = useState("Disabled");
@@ -69,6 +75,7 @@ function ResourceContent({ resource, initialParams, title, actions }: {
       <PageHeader title={title ?? resource.title} description="Live backend records. Missing fields are labelled; failed requests are never replaced with sample data." actions={
         <><Button variant="outline" size="sm" onClick={result.retry} disabled={result.loading}>Refresh</Button>{actions}</>
       } />
+      {summary}
       {resource.note && <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">{resource.note}</p>}
       {resource.search && (
         <form className="flex max-w-lg gap-2" onSubmit={(event) => { event.preventDefault(); setPage(1); setQuery(search.trim()); }}>
@@ -81,11 +88,15 @@ function ResourceContent({ resource, initialParams, title, actions }: {
         pageSize={resource.paginated ? 20 : 25} serverPaginated={resource.paginated} getRowId={recordId}
         emptyTitle="No records returned" emptyDescription="The backend successfully returned no records for this query."
         columns={resource.fields.map((field) => ({ key: field.key, header: field.label, cell: (record: AdminRecord) => <FieldValue record={record} field={field} /> }))}
-        toolbar={resource.filters?.map((filter) => (
-          <FilterSelect key={filter.key} label={filter.label} value={String(filters[filter.key] ?? initialParams[filter.key] ?? "all")}
-            options={filter.options} onChange={(value) => { setFilters((previous) => ({ ...previous, [filter.key]: value === "all" ? undefined : value })); setPage(1); }} />
-        ))}
-        rowActions={resource.detailPath || reconciliation || features ? (record) => (
+        toolbar={resource.filters?.map((filter) => {
+          const current = filters[filter.key] ?? initialParams[filter.key];
+          return (
+            <FilterSelect key={filter.key} label={filter.label} allLabel={filter.allLabel}
+              value={current === undefined || (filter.allValue !== undefined && current === filter.allValue) ? "all" : String(current)}
+              options={filter.options} onChange={(value) => { setFilters((previous) => ({ ...previous, [filter.key]: value === "all" ? filter.allValue : value })); setPage(1); }} />
+          );
+        })}
+        rowActions={rowActions ? (record) => rowActions(record, result.retry) : resource.detailPath || reconciliation || features ? (record) => (
           resource.detailPath ? <Button asChild size="sm" variant="outline"><Link to={`${resource.detailPath}/${encodeURIComponent(recordId(record))}`}>View record</Link></Button>
             : features ? <PermissionButton permission="system.manage" variant="outline" size="sm" disabled={record.isLocked === true || typeof record.key !== "string"} onClick={() => { setSelected(record); setFeatureState(String(record.state)); }}>Change state…</PermissionButton>
             : <PermissionButton permission="finance.manage" variant="outline" size="sm" disabled={record.status !== "Unresolved" || typeof record.id !== "string"} onClick={() => setSelected(record)}>Resolve…</PermissionButton>

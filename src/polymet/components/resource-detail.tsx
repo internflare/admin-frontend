@@ -6,7 +6,7 @@ import { PageHeader } from "@/polymet/components/page-header";
 import { SectionCard, DetailGrid } from "@/polymet/components/section-card";
 import { ConfirmActionDialog } from "@/polymet/components/confirm-action-dialog";
 import { PermissionButton, PermissionGuard } from "@/polymet/components/permission-controls";
-import { ErrorState, PageSkeleton } from "@/polymet/components/state-views";
+import { ErrorState, LoadingState } from "@/polymet/components/state-views";
 import { FieldValue, displayValue, ResourcePage } from "@/polymet/components/resource-page";
 import { UnavailableNotice } from "@/polymet/components/unavailable-page";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
@@ -14,7 +14,7 @@ import { useAdminQuery } from "@/polymet/lib/use-admin-query";
 import { fetchDetail, findDirectoryRecord, invalidResponse, isRecord, mutateAdmin, recordId, resources, type AdminRecord, type ResourceDefinition, type ResourceField } from "@/polymet/lib/admin-service";
 import type { Permission } from "@/polymet/data/admin-roles";
 
-type DetailKind = "users" | "companies" | "listings" | "workspaces" | "verification";
+type DetailKind = "users" | "companies" | "listings" | "workspaces" | "verification" | "feedback";
 type Mutation = { label: string; endpoint: string; payload: AdminRecord; permission: Permission; destructive?: boolean; reveal?: boolean };
 
 const extraFields: Record<DetailKind, ResourceField[]> = {
@@ -23,7 +23,16 @@ const extraFields: Record<DetailKind, ResourceField[]> = {
   listings: [{ key: "description", label: "Description" }, { key: "location", label: "Location" }, { key: "country", label: "Country" }, { key: "skills_required", label: "Required skills" }, { key: "is_paid", label: "Paid" }, { key: "compensation_min", label: "Minimum compensation" }, { key: "compensation_max", label: "Maximum compensation" }, { key: "currency", label: "Currency" }, { key: "payment_frequency", label: "Payment frequency" }, { key: "applicationCount", label: "Application count" }, { key: "moderation_reason", label: "Moderation reason" }],
   workspaces: [{ key: "features_enabled", label: "Enabled features" }, { key: "seats_available", label: "Seats available" }, { key: "last_reprovisioned_at", label: "Last re-provisioned", format: "date" }],
   verification: [{ key: "company.registration_number", label: "Company registration" }, { key: "company.contact_email", label: "Contact email" }, { key: "company.country", label: "Country" }, { key: "review_notes", label: "Review notes" }, { key: "decided_at", label: "Decision recorded", format: "date" }],
+  feedback: [{ key: "description", label: "Description" }, { key: "steps_to_reproduce", label: "Steps to reproduce" }, { key: "expected_behavior", label: "Expected behaviour" }, { key: "page_path", label: "Page" }, { key: "user_agent", label: "Browser" }, { key: "submitter.email", label: "Reporter email (server-authorised)" }, { key: "submitter.user_id", label: "Reporter user ID", href: (r) => isRecord(r.submitter) && typeof r.submitter.user_id === "string" ? `/users/${encodeURIComponent(r.submitter.user_id)}` : undefined }, { key: "admin_note", label: "Triage note" }, { key: "status_updated_at", label: "Status changed", format: "date" }],
 };
+
+const FEEDBACK_ACTIONS: { status: string; label: string; destructive?: boolean }[] = [
+  { status: "Triaged", label: "Mark triaged" },
+  { status: "Planned", label: "Mark planned" },
+  { status: "Resolved", label: "Mark resolved" },
+  { status: "Declined", label: "Decline", destructive: true },
+  { status: "New", label: "Reopen as new" },
+];
 
 function safeDocumentUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -45,12 +54,12 @@ function DetailContent({ kind, id }: { kind: DetailKind; id: string }) {
   const fetcher = useCallback(async () => {
     if (!id) throw new Error("A record ID is required.");
     if (kind === "companies" || kind === "workspaces") return findDirectoryRecord(resources[kind], id);
-    return fetchDetail(`${resources[kind].endpoint}/${encodeURIComponent(id)}`, kind === "users" ? "user" : kind === "listings" ? "listing" : "verification");
+    return fetchDetail(`${resources[kind].endpoint}/${encodeURIComponent(id)}`, kind === "users" ? "user" : kind === "listings" ? "listing" : kind === "feedback" ? "feedback" : "verification");
   }, [kind, id]);
   const query = useAdminQuery(fetcher);
   const [pending, setPending] = useState<Mutation | null>(null);
   const [pii, setPii] = useState<AdminRecord | null>(null);
-  if (query.loading) return <PageSkeleton />;
+  if (query.loading) return <LoadingState label="Loading record" />;
   if (query.error || !query.data) return <ErrorState description={query.error ?? "The API did not return this record."} onRetry={query.retry} />;
   const record = query.data;
   const mutations: Mutation[] = [];
@@ -65,6 +74,10 @@ function DetailContent({ kind, id }: { kind: DetailKind; id: string }) {
     mutations.push({ label: "Re-provision workspace", endpoint: `/workspaces/${encodeURIComponent(id)}/re-provision`, payload: {}, permission: "workspaces.manage" });
   } else if (kind === "verification" && !["APPROVED", "REJECTED"].includes(String(record.status))) {
     for (const decision of ["Approve", "Reject", "Request more information"]) mutations.push({ label: decision, endpoint: `/verification/${encodeURIComponent(id)}/decision`, payload: { decision }, permission: "companies.verify", destructive: decision === "Reject" });
+  } else if (kind === "feedback") {
+    for (const action of FEEDBACK_ACTIONS) {
+      if (record.status !== action.status) mutations.push({ label: action.label, endpoint: `/feedback/${encodeURIComponent(id)}/status`, payload: { status: action.status }, permission: "support.manage", destructive: action.destructive });
+    }
   }
   const checklist = Array.isArray(record.checklist) ? record.checklist.filter(isRecord) : [];
   const documents = Array.isArray(record.documents) ? record.documents.filter(isRecord) : [];

@@ -2,17 +2,17 @@ import { Link } from "react-router-dom";
 import { ArrowRightIcon } from "lucide-react";
 import { PriorityBadge } from "@/polymet/components/status-badge";
 import { SectionCard } from "@/polymet/components/section-card";
-import type { ActionItem } from "@/polymet/data/operations-data";
+import type { ActionQueueItem } from "@/polymet/lib/action-queue-service";
 import { formatRelative } from "@/polymet/lib/format";
 
 interface AttentionPanelProps {
-  items: ActionItem[];
+  items: ActionQueueItem[];
   limit?: number;
 }
 
 /** Actionable operational items; each row links to its management page. */
 export function AttentionPanel({ items, limit = 8 }: AttentionPanelProps) {
-  const open = items.filter((i) => i.status !== "Resolved");
+  const open = items;
   return (
     <SectionCard
       title="Operational attention"
@@ -35,7 +35,7 @@ export function AttentionPanel({ items, limit = 8 }: AttentionPanelProps) {
                 <PriorityBadge priority={item.priority} />
               </div>
               <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm leading-snug">{item.summary}</p>
+                <p className="text-sm leading-snug">{item.title}</p>
                 <p className="text-xs text-muted-foreground">
                   {item.recordType} · <span className="font-mono">{item.recordRef}</span> · {formatRelative(item.createdAt)}
                 </p>

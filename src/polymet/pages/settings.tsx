@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,27 +8,44 @@ import { SectionCard } from "@/polymet/components/section-card";
 import { ResourcePage } from "@/polymet/components/resource-page";
 import { UnavailablePage } from "@/polymet/components/unavailable-page";
 import { PermissionGuard } from "@/polymet/components/permission-controls";
+import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
+import { ChangeRoleAction, RolePermissionMatrix } from "@/polymet/components/admin-role-management";
 import { ADMIN_ROLES } from "@/polymet/data/admin-roles";
-import { mutateAdmin, resources } from "@/polymet/lib/admin-service";
+import { fetchRoleMatrix, mutateAdmin, resources } from "@/polymet/lib/admin-service";
+import { useAdminQuery } from "@/polymet/lib/use-admin-query";
 
 type Tab = "platform" | "admins" | "features" | "security";
 
 function SettingsContent({ initialTab }: { initialTab: Tab }) {
   const [tab, setTab] = useState(initialTab);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [roleId, setRoleId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [revision, setRevision] = useState(0);
   return (
     <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="space-y-5">
       <TabsList><TabsTrigger value="platform">Platform</TabsTrigger><TabsTrigger value="admins">Admins & roles</TabsTrigger><TabsTrigger value="features">Features</TabsTrigger><TabsTrigger value="security">Security</TabsTrigger></TabsList>
       <TabsContent value="platform"><UnavailablePage title="Platform settings" permission="system.manage" description="General platform settings, notification providers, integration credentials, maintenance mode and AI limits do not have configuration endpoints." /></TabsContent>
       <TabsContent value="security"><UnavailablePage title="Security & configuration" permission="system.manage" description="Global session revocation, session-timeout configuration and authentication-policy edits are not implemented in the admin API. Sign-out remains available in the account menu." /></TabsContent>
       <TabsContent value="features"><ResourcePage resource={resources.features} /></TabsContent>
-      <TabsContent value="admins" className="space-y-5">
-        <ResourcePage key={revision} resource={resources.admins} />
+      <TabsContent value="admins" className="space-y-5"><AdminsTab /></TabsContent>
+    </Tabs>
+  );
+}
+
+function AdminsTab() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [roleId, setRoleId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const { admin } = useAdminAuth();
+  // Re-fetched whenever an admin is invited or re-assigned so the per-role counts stay current.
+  const roleFetcher = useCallback(() => { void revision; return fetchRoleMatrix(); }, [revision]);
+  const roles = useAdminQuery(roleFetcher);
+  return (
+      <>
+        <ResourcePage key={revision} resource={resources.admins} rowActions={(record) => (
+          <ChangeRoleAction record={record} currentAdminId={admin?.id} roles={roles.data} onChanged={() => setRevision((value) => value + 1)} />
+        )} />
+        <RolePermissionMatrix roles={roles} />
         <SectionCard title="Invite administrator" description="Creates an invitation through the backend. Success confirms the invitation record, not email delivery.">
           <form className="max-w-xl space-y-3" onSubmit={async (event) => {
             event.preventDefault();
@@ -49,8 +66,7 @@ function SettingsContent({ initialTab }: { initialTab: Tab }) {
             <Button type="submit" disabled={submitting || !name.trim() || !email.trim() || !roleId}>{submitting ? "Submitting…" : "Invite administrator"}</Button>
           </form>
         </SectionCard>
-      </TabsContent>
-    </Tabs>
+      </>
   );
 }
 

@@ -4,7 +4,7 @@ import { AdminRoleProvider } from "@/polymet/components/admin-role-provider";
 import { AdminLayout } from "@/polymet/layouts/admin-layout";
 import { AdminAuthProvider, useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import LoginPage from "@/polymet/pages/login";
-import { EmptyState, SessionSkeleton } from "@/polymet/components/state-views";
+import { EmptyState, SessionLoading } from "@/polymet/components/state-views";
 import ExecutiveDashboardPage from "@/polymet/pages/executive-dashboard";
 import OperationalHealthPage from "@/polymet/pages/operational-health";
 import ActionQueuePage from "@/polymet/pages/action-queue";
@@ -37,6 +37,8 @@ import AIUsagePage from "@/polymet/pages/ai-usage";
 import NotificationsPage from "@/polymet/pages/notifications";
 import SupportPage from "@/polymet/pages/support";
 import SupportTicketDetailPage from "@/polymet/pages/support-ticket-detail";
+import FeedbackPage from "@/polymet/pages/feedback";
+import FeedbackDetailPage from "@/polymet/pages/feedback-detail";
 import DisputesPage from "@/polymet/pages/disputes";
 import AuditLogsPage from "@/polymet/pages/audit-logs";
 import AnalyticsPage from "@/polymet/pages/analytics";
@@ -47,7 +49,7 @@ function RequireAdmin() {
   const location = useLocation();
 
   if (isLoadingSession) {
-    return <SessionSkeleton />;
+    return <SessionLoading />;
   }
 
   if (!admin) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
@@ -121,9 +123,11 @@ export default function InternflareAdminPrototype() {
             <Route path="/support" element={<SupportPage key="all" />} />
             <Route path="/support/escalations" element={<SupportPage key="escalated" initialView="escalated" />} />
             <Route path="/support/:ticketId" element={<SupportTicketDetailPage />} />
+            <Route path="/feedback" element={<FeedbackPage />} />
+            <Route path="/feedback/:feedbackId" element={<FeedbackDetailPage />} />
             <Route path="/disputes" element={<DisputesPage />} />
             <Route path="/audit-logs" element={<AuditLogsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage key="talent" />} />
+            <Route path="/analytics" element={<AnalyticsPage key="all" />} />
             <Route path="/analytics/commercial" element={<AnalyticsPage key="commercial" initialTab="commercial" />} />
 
             {/* System */}

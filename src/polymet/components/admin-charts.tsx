@@ -1,4 +1,4 @@
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Label, Line, LineChart, Pie, PieChart, XAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { formatNumber } from "@/polymet/lib/format";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,78 @@ export function FunnelBars({ steps, className }: { steps: { stage: string; value
         );
       })}
     </ol>
+  );
+}
+
+export const CHART_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-5))",
+  "#34d399",
+  "#60a5fa",
+  "#f472b6",
+];
+
+/** Message shown in place of a chart when no records exist for it. */
+export function ChartEmpty({ message = "No records yet for this period.", height = 220 }: { message?: string; height?: number }) {
+  return (
+    <div className="flex items-center justify-center rounded-md border border-dashed text-center text-xs text-muted-foreground" style={{ height }}>
+      <span className="max-w-60 px-4">{message}</span>
+    </div>
+  );
+}
+
+interface DonutChartProps {
+  items: { label: string; value: number }[];
+  /** Caption under the total in the centre of the donut. */
+  centerLabel?: string;
+  format?: (n: number) => string;
+  height?: number;
+  emptyMessage?: string;
+}
+
+export function DonutChart({ items, centerLabel = "Total", format = formatNumber, height = 200, emptyMessage }: DonutChartProps) {
+  const data = items.filter((item) => item.value > 0).map((item, i) => ({ ...item, key: `slice${i}`, fill: CHART_COLORS[i % CHART_COLORS.length] }));
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  if (total === 0) return <ChartEmpty message={emptyMessage} height={height} />;
+  const config = Object.fromEntries(data.map((item) => [item.key, { label: item.label, color: item.fill }]));
+  return (
+    <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <ChartContainer config={config} className="mx-auto aspect-square w-full max-w-[220px]" style={{ height }}>
+        <PieChart>
+          <ChartTooltip content={<ChartTooltipContent nameKey="key" hideLabel />} />
+          <Pie data={data} dataKey="value" nameKey="key" innerRadius="58%" outerRadius="88%" paddingAngle={data.length > 1 ? 2 : 0} strokeWidth={0}>
+            {data.map((item) => <Cell key={item.key} fill={item.fill} />)}
+            <Label
+              content={({ viewBox }) => {
+                if (!viewBox || !("cx" in viewBox) || !("cy" in viewBox)) return null;
+                return (
+                  <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-lg font-semibold">{format(total)}</tspan>
+                    <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 18} className="fill-muted-foreground text-[10px]">{centerLabel}</tspan>
+                  </text>
+                );
+              }}
+            />
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+      <ul className="space-y-2">
+        {data.map((item) => (
+          <li key={item.key} className="flex items-center justify-between gap-2 text-xs">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="size-2 shrink-0 rounded-sm" style={{ background: item.fill }} />
+              <span className="truncate">{item.label}</span>
+            </span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {format(item.value)} <span className="text-[10px]">({((item.value / total) * 100).toFixed(0)}%)</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

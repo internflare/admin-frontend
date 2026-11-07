@@ -4,9 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { OTP_LENGTH, OTP_RESEND_COOLDOWN_S, OTP_TTL_MS } from "@/polymet/components/admin-auth-provider";
+import {
+  OTP_LENGTH,
+  OTP_RESEND_COOLDOWN_S,
+  OTP_TTL_MS,
+} from "@/polymet/components/admin-auth-provider";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const codeLength = OTP_LENGTH;
+const resendAfter = OTP_RESEND_COOLDOWN_S;
+const expiresInMinutes = Math.round(OTP_TTL_MS / 60_000);
 
 function maskEmail(val: string): string {
   const [local, domain] = val.split("@");
@@ -91,16 +98,16 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
   const [locked, setLocked] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  const [cooldown, setCooldown] = useState(OTP_RESEND_COOLDOWN_S);
+  const [cooldown, setCooldown] = useState(resendAfter);
 
   useEffect(() => {
     if (cooldown <= 0) return;
-    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    const t = setTimeout(() => setCooldown((c: number) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
 
   const verify = async (value: string) => {
-    if (value.length !== OTP_LENGTH || verifying) return;
+    if (value.length !== codeLength || verifying) return;
     setVerifying(true);
     setError(null);
     const result = await onVerify(value);
@@ -123,7 +130,7 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
     setError(null);
     setLocked(false);
     setCode("");
-    setCooldown(OTP_RESEND_COOLDOWN_S);
+    setCooldown(resendAfter);
   };
 
   return (
@@ -141,14 +148,14 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
         <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
         <p className="text-sm text-muted-foreground">
           If <span className="font-medium text-foreground">{maskEmail(email)}</span> belongs to an active administrator,
-          a {OTP_LENGTH}-digit code will arrive by email. It expires {OTP_TTL_MS / 60_000} minutes after your request.
+          a {codeLength}-digit code will arrive by email. It expires {expiresInMinutes} {expiresInMinutes === 1 ? "minute" : "minutes"} after your request.
         </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="otp">Sign-in code</Label>
         <InputOTP
           id="otp"
-          maxLength={OTP_LENGTH}
+          maxLength={codeLength}
           value={code}
           onChange={(v) => {
             setCode(v.replace(/\D/g, ""));
@@ -162,7 +169,7 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
           containerClassName="justify-between"
         >
           <InputOTPGroup className="w-full justify-between gap-2">
-            {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+            {Array.from({ length: codeLength }).map((_, i) => (
               <InputOTPSlot
                 key={i}
                 index={i}
@@ -177,7 +184,7 @@ export function LoginCodeStep({ email, onVerify, onResend, onBack }: CodeStepPro
           </p>
         )}
       </div>
-      <Button type="submit" className="h-11 w-full" disabled={code.length !== OTP_LENGTH || verifying || locked}>
+      <Button type="submit" className="h-11 w-full" disabled={code.length !== codeLength || verifying || locked}>
         {verifying ? <Loader2Icon className="size-4 animate-spin" /> : "Verify and sign in"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">

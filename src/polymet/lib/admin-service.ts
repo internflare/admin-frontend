@@ -1,5 +1,5 @@
 import { apiClient, ApiError, handleApiError } from "@/polymet/lib/api-client";
-import type { Permission } from "@/polymet/data/admin-roles";
+import type { AdminRoleId, Permission } from "@/polymet/data/admin-roles";
 
 export type AdminRecord = Record<string, unknown>;
 export type QueryParams = Record<string, string | number | undefined>;
@@ -22,7 +22,7 @@ export interface ResourceDefinition {
   search?: boolean;
   detailPath?: string;
   note?: string;
-  filters?: { key: string; label: string; options: string[] }[];
+  filters?: { key: string; label: string; options: string[]; defaultValue?: string; allValue?: string; allLabel?: string }[];
 }
 
 export interface CollectionResult {
@@ -53,9 +53,9 @@ export const resources = {
   users: {
     title: "Talent & user accounts", endpoint: "/users", envelope: "users", permission: "users.view",
     paginated: true, search: true, detailPath: "/users",
-    fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email (server-authorised)" }, { key: "role", label: "Account type" }, { key: "status", label: "Status", format: "status" }, { key: "emailVerified", label: "Email verified" }, { key: "createdAt", label: "Registered", format: "date" }],
-    filters: [{ key: "status", label: "Status", options: ["Active", "Restricted", "Suspended", "Deactivated"] }, { key: "accountType", label: "Type", options: ["talent", "employer", "employee", "supervisor", "mentor"] }],
-    note: "Identity, qualification, profile completeness, plan and last-active data are not supplied by the user API. Email verification is not identity verification.",
+    fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email (server-authorised)" }, { key: "accountType", label: "Account type" }, { key: "status", label: "Status", format: "status" }, { key: "emailVerified", label: "Email verified" }, { key: "createdAt", label: "Registered", format: "date" }],
+    filters: [{ key: "status", label: "Status", options: ["Active", "Restricted", "Suspended", "Deactivated"] }, { key: "accountType", label: "Type", options: ["talent", "employer", "admin", "not_onboarded"] }],
+    note: "Account type is derived the same way the platform routes users: an active company membership makes an employer, a talent profile makes talent, administrator emails are admin, and anyone with neither has not finished onboarding. Identity, qualification, profile completeness, plan and last-active data are not supplied by the user API. Email verification is not identity verification.",
   },
   companies: {
     title: "Company directory", endpoint: "/companies", envelope: "companies", permission: "companies.view",
@@ -67,8 +67,7 @@ export const resources = {
     title: "Company verification", endpoint: "/verification", envelope: "queue", permission: "companies.view",
     paginated: true, detailPath: "/verification",
     fields: [{ key: "company.name", label: "Company" }, { key: "status", label: "Decision", format: "status" }, { key: "reviewer_id", label: "Reviewer ID" }, { key: "created_at", label: "Submitted", format: "date" }],
-    filters: [{ key: "status", label: "Status", options: ["PENDING_REVIEW", "MORE_INFO_REQUIRED", "APPROVED", "REJECTED"] }],
-    note: "By default the backend returns pending reviews and requests for more information. Choose a status to see completed decisions.",
+    filters: [{ key: "status", label: "Status", options: ["OPEN", "PENDING_REVIEW", "MORE_INFO_REQUIRED", "APPROVED", "REJECTED"], defaultValue: "OPEN", allValue: "ALL", allLabel: "All decisions" }],
   },
   listings: {
     title: "Jobs & internships", endpoint: "/listings", envelope: "listings", permission: "listings.view",
@@ -96,6 +95,13 @@ export const resources = {
     fields: [{ key: "name", label: "Workspace" }, { key: "company_name", label: "Company" }, { key: "plan_tier", label: "Plan" }, { key: "seats_used", label: "Seats used" }, { key: "seat_quota", label: "Seat quota" }, { key: "status", label: "Status", format: "status" }, { key: "last_synced_at", label: "Last synced", format: "date" }],
     filters: [{ key: "status", label: "Status", options: ["Active", "Suspended", "Over_Quota", "Provisioning_Error"] }],
     note: "Member lists, projects, reports, onboarding and individual access issues are not exposed by the admin API.",
+  },
+  feedback: {
+    title: "Bug reports & feature ideas", endpoint: "/feedback", envelope: "feedback", permission: "support.view",
+    paginated: true, search: true, detailPath: "/feedback",
+    fields: [{ key: "reference", label: "Reference" }, { key: "title", label: "Title" }, { key: "type", label: "Type" }, { key: "portal", label: "Portal" }, { key: "severity", label: "Severity" }, { key: "status", label: "Status", format: "status" }, { key: "submitter.name", label: "Submitted by" }, { key: "created_at", label: "Submitted", format: "date" }],
+    filters: [{ key: "type", label: "Type", options: ["bug", "feature"] }, { key: "status", label: "Status", options: ["New", "Triaged", "Planned", "Resolved", "Declined"] }, { key: "portal", label: "Portal", options: ["talent", "employer"] }],
+    note: "Submitted by talent and employers from the account menu. Search matches the reference, title and description. Severity applies to bug reports only.",
   },
   mentors: {
     title: "Mentor directory", endpoint: "/mentors", envelope: "mentors", permission: "mentors.manage", paginated: true, search: true,
@@ -125,12 +131,17 @@ export const resources = {
   },
   audit: {
     title: "Audit logs", endpoint: "/audit-logs", envelope: "logs", permission: "audit.view", paginated: true, search: true,
-    fields: [{ key: "actorName", label: "Actor" }, { key: "action", label: "Action" }, { key: "entityType", label: "Entity type" }, { key: "entityId", label: "Entity ID" }, { key: "outcome", label: "Outcome", format: "status" }, { key: "reason", label: "Reason" }, { key: "createdAt", label: "Recorded", format: "date" }],
+    fields: [{ key: "createdAt", label: "When", format: "date" }, { key: "actorName", label: "Who" }, { key: "actorRole", label: "Role" }, { key: "action", label: "Action" }, { key: "entityType", label: "Entity type" }, { key: "entityId", label: "Entity ID" }, { key: "outcome", label: "Outcome", format: "status" }, { key: "ipAddress", label: "IP address" }, { key: "reason", label: "Reason" }],
+    filters: [
+      { key: "outcome", label: "Outcome", options: ["Success", "Failed"] },
+      { key: "entityType", label: "Entity", options: ["admin_session", "admin_user", "user", "company", "company_verification", "listing", "workspace", "reconciliation", "feature_flag", "Feedback", "Incident", "system"] },
+    ],
+    note: "Every administrative change, sign-in, sign-out and denied attempt is recorded with the actor, their role, the client IP address and browser. Open a record to see exactly what changed. Search also matches IP addresses.",
   },
   admins: {
     title: "Admin users & roles", endpoint: "/settings/admins", envelope: "admins", permission: "system.manage",
     fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "roleId", label: "Role" }, { key: "mfaEnabled", label: "MFA enabled" }, { key: "status", label: "Status", format: "status" }, { key: "lastActiveAt", label: "Last active", format: "date" }],
-    note: "Administrator invitations are supported. Editing an existing administrator's role and revoking all sessions are not implemented.",
+    note: "Role changes take effect on the administrator's next request and are recorded in the audit log. The super administrator's role cannot be changed, and you cannot change your own role. Revoking all sessions is not implemented.",
   },
   features: {
     title: "Feature availability", endpoint: "/settings/features", envelope: "flags", permission: "system.manage",
@@ -178,6 +189,26 @@ export async function mutateAdmin(endpoint: string, payload: AdminRecord, method
   const response = await apiClient[method]<unknown>(endpoint, payload);
   if (!isRecord(response) || response.success !== true) invalidResponse(endpoint);
   return response;
+}
+
+export interface RoleMatrixEntry {
+  id: AdminRoleId;
+  label: string;
+  description: string;
+  permissions: Permission[];
+  adminCount: number;
+}
+
+/** Role definitions as enforced by the backend, so the matrix never drifts from real access. */
+export async function fetchRoleMatrix(): Promise<RoleMatrixEntry[]> {
+  const response = await apiClient.get<unknown>("/settings/roles");
+  if (!isRecord(response) || response.success !== true || !Array.isArray(response.roles)) invalidResponse("/settings/roles");
+  const roles: unknown[] = response.roles;
+  if (!roles.every((role) => isRecord(role) && typeof role.id === "string" && typeof role.label === "string" &&
+      typeof role.description === "string" && Array.isArray(role.permissions) && Number.isInteger(role.adminCount))) {
+    invalidResponse("/settings/roles");
+  }
+  return roles as RoleMatrixEntry[];
 }
 
 export async function fetchHealth(): Promise<AdminRecord> {

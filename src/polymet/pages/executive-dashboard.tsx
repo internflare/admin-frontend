@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/polymet/components/page-header";
 import { MetricCard } from "@/polymet/components/metric-card";
 import { PermissionGuard } from "@/polymet/components/permission-controls";
-import { UnavailableNotice } from "@/polymet/components/unavailable-page";
+import { ErrorState, LoadingState } from "@/polymet/components/state-views";
+import { AccountTypesDonut, CommercialPanels, RecruitmentPanels, SignupsTrend } from "@/polymet/components/analytics-panels";
+import { fetchAnalytics } from "@/polymet/lib/analytics-service";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
 import { fetchCollection, invalidResponse, resources, type QueryParams, type ResourceDefinition } from "@/polymet/lib/admin-service";
 import { useAdminQuery } from "@/polymet/lib/use-admin-query";
@@ -31,17 +33,40 @@ function LiveCount({ label, resource, params, href }: typeof COUNTS[number]) {
   return <MetricCard label={label} value={query.loading ? <div role="status" aria-busy="true" aria-label={`Loading ${label}`}><span className="sr-only">Loading {label}</span><Skeleton className="h-8 w-20" /></div> : query.data?.toLocaleString() ?? "Unavailable"} href={href} definition="Current matching record total from this module's paginated backend directory. No benchmark or estimated fallback is used." />;
 }
 
+const loadDashboardAnalytics = () => fetchAnalytics("/dashboard", "30d");
+
+function DashboardCharts() {
+  const { data, loading, error, retry } = useAdminQuery(loadDashboardAnalytics);
+  if (loading) {
+    return (
+      <LoadingState label="Loading charts" className="rounded-lg border" />
+    );
+  }
+  if (error || !data) return <ErrorState title="Couldn't load charts" description={error ?? undefined} onRetry={retry} className="rounded-lg border" />;
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {data.users && <SignupsTrend users={data.users} bucket={data.bucket} />}
+      {data.users && <AccountTypesDonut users={data.users} />}
+      {data.recruitment && <RecruitmentPanels recruitment={data.recruitment} bucket={data.bucket} />}
+      {data.commercial && <CommercialPanels commercial={data.commercial} bucket={data.bucket} />}
+    </div>
+  );
+}
+
 export default function ExecutiveDashboardPage() {
   const { can } = useAdminRole();
   return (
     <PermissionGuard permission="dashboard.view">
       <div className="space-y-5">
-        <PageHeader title="Executive dashboard" description="Current database record totals from the live admin directories. Metrics are shown only for modules your role can access." />
+        <PageHeader title="Executive dashboard" description="Current record totals and last-30-day activity from the live database. Metrics are shown only for modules your role can access." />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {COUNTS.filter((count) => can(count.resource.permission) || (count.resource.alternativePermission && can(count.resource.alternativePermission))).map((count) => <LiveCount key={count.label} {...count} />)}
         </div>
-        <UnavailableNotice>Historical charts, revenue, growth deltas, source performance, AI costs, engagement outcomes and the aggregated action queue are not backed by reliable recorded-event analytics in the current API. The backend dashboard's baseline and estimated values are not used.</UnavailableNotice>
-        <Button asChild variant="outline"><Link to="/health">View live admin-service health</Link></Button>
+        <DashboardCharts />
+        <div className="flex flex-wrap gap-2">
+          {can("analytics.view") && <Button asChild variant="outline"><Link to="/analytics">Open full analytics</Link></Button>}
+          <Button asChild variant="outline"><Link to="/health">View live admin-service health</Link></Button>
+        </div>
       </div>
     </PermissionGuard>
   );

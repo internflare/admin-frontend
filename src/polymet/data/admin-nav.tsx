@@ -33,6 +33,7 @@ import {
   TargetIcon,
   BellIcon,
   LifeBuoyIcon,
+  BugIcon,
   GavelIcon,
   SirenIcon,
   ScrollTextIcon,
@@ -126,6 +127,7 @@ export const ADMIN_NAV: NavSection[] = [
     items: [
       { title: "Notifications", href: "/notifications", icon: BellIcon, permission: "notifications.manage" },
       { title: "Support tickets", href: "/support", icon: LifeBuoyIcon, permission: "support.view" },
+      { title: "Bug reports & ideas", href: "/feedback", icon: BugIcon, permission: "support.view" },
       { title: "Disputes", href: "/disputes", icon: GavelIcon, permission: "disputes.manage" },
       { title: "Reports & escalations", href: "/support/escalations", icon: SirenIcon, permission: "support.view" },
       { title: "Audit logs", href: "/audit-logs", icon: ScrollTextIcon, permission: "audit.view" },

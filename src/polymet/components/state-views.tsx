@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangleIcon, InboxIcon, RotateCwIcon, ShieldOffIcon } from "lucide-react";
+import { AlertTriangleIcon, InboxIcon, Loader2Icon, RotateCwIcon, ShieldOffIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -19,39 +19,19 @@ export function TableSkeleton({ rows = 6, columns = 5 }: { rows?: number; column
   );
 }
 
-export function PageSkeleton() {
+/** For content whose layout depends on the response; use skeletons only when the layout is fixed. */
+export function LoadingState({ label = "Loading", className }: { label?: string; className?: string }) {
   return (
-    <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading page">
-      <span className="sr-only">Loading page</span>
-      <Skeleton className="h-8 w-64 max-w-full" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-28" />
-        ))}
-      </div>
-      <Skeleton className="h-72" />
+    <div role="status" aria-busy="true" aria-live="polite" className={cn("flex flex-col items-center justify-center gap-3 px-6 py-12 text-center", className)}>
+      <Loader2Icon aria-hidden="true" className="size-6 animate-spin text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{label}…</p>
     </div>
   );
 }
 
-export function SessionSkeleton({ login = false }: { login?: boolean }) {
-  return (
-    <div className="min-h-screen bg-background">
-      <div aria-hidden="true" className="flex h-16 items-center justify-between border-b px-5 sm:px-8">
-        <Skeleton className="h-8 w-36" /><Skeleton className="size-9 rounded-full" />
-      </div>
-      {login ? (
-        <div role="status" aria-busy="true" aria-label="Loading sign-in" className="mx-auto max-w-sm space-y-6 px-5 py-20">
-          <span className="sr-only">Loading sign-in</span>
-          <Skeleton className="h-8 w-3/4" /><Skeleton className="h-4 w-full" />
-          <Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" />
-          <Skeleton className="h-20 w-full" />
-        </div>
-      ) : (
-        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8"><PageSkeleton /></div>
-      )}
-    </div>
-  );
+/** Shown while the session is resolved: the result may be the console, the sign-in page or a redirect. */
+export function SessionLoading({ label = "Checking your session" }: { label?: string }) {
+  return <LoadingState label={label} className="min-h-screen bg-background" />;
 }
 
 interface StateProps {
