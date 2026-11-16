@@ -52,7 +52,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: { open: boolean; onOp
       {open && search.state.phase === "ready" && search.state.query
         ? SEARCHABLE.filter(({ resource }) => canSearch(resource)).map((group) => <SearchResults key={`${group.path}:${search.state.query}`} {...group} query={search.state.query!} go={go} />)
         : search.state.phase === "pending"
-          ? <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground" role="status"><Spinner aria-label="Waiting to search" /> Searching after 5 seconds of inactivity…</div>
+          ? <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground" role="status"><Spinner aria-label="Searching" /></div>
           : search.state.phase === "too-short"
             ? <p className="p-3 text-xs text-muted-foreground" role="status">Enter at least 3 characters. Short searches are not sent.</p>
             : search.state.phase === "too-long"

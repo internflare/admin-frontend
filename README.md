@@ -17,7 +17,7 @@ confirmation. The role matrix shows role defaults; per-admin grants are separate
 
 Disputes now uses persistent `/disputes` list/detail/create APIs, with server
 status/priority filters and pagination. Search reuses the shared 3-character,
-5000ms idle-delay/cancellation lifecycle. Read access is `support.view`; create,
+3000ms idle-delay/cancellation lifecycle. Read access is `support.view`; create,
 assign/reassign, internal notes, evidence URL references, escalation and final
 resolution require `disputes.manage`. Optional user/application links use real
 lookups; assignment lists only active administrators. Application lookup requires
@@ -108,7 +108,7 @@ Related application/listing queries require valid backend-supported ObjectIds,
 rather than risking an ignored filter and showing unrelated records.
 
 Search trims input and only sends non-empty queries of 3–100 characters after
-5000ms (5 seconds) without typing. Short and overlong queries are not sent;
+3000ms (3 seconds) without typing. Short and overlong queries are not sent;
 clearing a resource search reloads its normal list after the same idle delay.
 Search runs against authorized backend directories (users, companies, verification,
 listings, applications, placements, workspaces, mentors, supervisors, feedback,

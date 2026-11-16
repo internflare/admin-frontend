@@ -90,11 +90,6 @@ function ResourceContent({ resource, initialParams, title, actions, summary, row
             }}
             placeholder="Search backend records (3–100 characters)…"
           />
-          {search.state.phase === "pending" && (
-            <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
-              <Spinner aria-label="Waiting to search" /> Searching after 5 seconds of inactivity…
-            </p>
-          )}
           {search.state.phase === "too-short" && <p className="text-xs text-muted-foreground" role="status">Enter at least 3 characters. Short searches are not sent.</p>}
           {search.state.phase === "too-long" && <p className="text-xs text-destructive" role="alert">Search must be 100 characters or fewer.</p>}
         </div>
@@ -120,7 +115,7 @@ function ResourceContent({ resource, initialParams, title, actions, summary, row
           ) : undefined}
         />
       ) : search.state.phase === "pending" ? (
-        <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground"><Spinner aria-label="Searching backend" /> Waiting for an idle search query…</div>
+        <div className="flex justify-center rounded-lg border p-8" role="status"><Spinner aria-label="Searching" /></div>
       ) : null}
       {!result.loading && !result.error && pagination && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">

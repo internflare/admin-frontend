@@ -1,4 +1,4 @@
-export const ADMIN_SEARCH_DEBOUNCE_MS = 5000;
+export const ADMIN_SEARCH_DEBOUNCE_MS = 3000;
 export const ADMIN_SEARCH_MIN_LENGTH = 3;
 export const ADMIN_SEARCH_MAX_LENGTH = 100;
 

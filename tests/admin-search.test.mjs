@@ -42,7 +42,7 @@ class FakeClock {
   }
 }
 
-test("admin search trims queries, enforces three characters, and waits for five quiet seconds", async () => {
+test("admin search trims queries, enforces three characters, and waits for three quiet seconds", async () => {
   const clock = new FakeClock();
   const states = [];
   const { createDebouncedAdminSearch } = await loadTypeScript("../src/polymet/lib/admin-search.ts");
@@ -54,15 +54,15 @@ test("admin search trims queries, enforces three characters, and waits for five 
 
   search.update("  ab ");
   assert.equal(states.at(-1).phase, "too-short");
-  clock.advance(5000);
+  clock.advance(3000);
   assert.equal(states.some((state) => state.query), false);
 
   search.update("  ada ");
   assert.equal(states.at(-1).phase, "pending");
   assert.equal(states.at(-1).query, undefined);
-  clock.advance(4999);
+  clock.advance(2999);
   search.update("  adae ");
-  clock.advance(4999);
+  clock.advance(2999);
   assert.equal(states.at(-1).phase, "pending");
   clock.advance(1);
   assert.equal(states.at(-1).phase, "ready");
@@ -71,7 +71,7 @@ test("admin search trims queries, enforces three characters, and waits for five 
   search.dispose();
 });
 
-test("clearing a resource search waits five seconds before requesting the normal list", async () => {
+test("clearing a resource search waits three seconds before requesting the normal list", async () => {
   const clock = new FakeClock();
   const states = [];
   const { createDebouncedAdminSearch } = await loadTypeScript("../src/polymet/lib/admin-search.ts");
@@ -83,7 +83,7 @@ test("clearing a resource search waits five seconds before requesting the normal
 
   search.update("");
   assert.equal(states.at(-1).phase, "pending");
-  clock.advance(4999);
+  clock.advance(2999);
   assert.equal(states.at(-1).phase, "pending");
   clock.advance(1);
   assert.equal(states.at(-1).phase, "ready");

@@ -26,7 +26,7 @@ function Lookup({ kind, label, value, onChange, required = false }: {
     <Field label={`${label}${required ? " (required)" : " (optional)"}`}>
       <Input aria-label={`Search ${label}`} value={search.input} onChange={(event) => { result.cancel(); search.update(event.target.value); }} placeholder={kind === "applications" ? "Search by exact application ID…" : `Search ${label.toLowerCase()} by name…`} />
     </Field>
-    {search.state.phase === "pending" && <p role="status" className="flex items-center gap-2 text-xs"><Spinner /> Searching after 5 seconds of inactivity…</p>}
+    {search.state.phase === "pending" && <p role="status" className="flex items-center gap-2 text-xs"><Spinner aria-label="Searching" /></p>}
     {search.state.phase === "too-short" && <p role="status" className="text-xs">Enter at least 3 characters.</p>}
     {search.state.phase === "too-long" && <p role="alert" className="text-xs text-destructive">Search must be 100 characters or fewer.</p>}
     {result.loading && <p role="status" className="text-xs">Loading matches…</p>}
