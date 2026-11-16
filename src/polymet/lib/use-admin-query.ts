@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createQueryRequestGate } from "@/polymet/lib/query-request-gate";
 
 export interface AdminQueryState<T> {
   data: T | undefined;
   loading: boolean;
   error: string | null;
   retry: () => void;
+  cancel: () => void;
 }
 
 /**
@@ -16,34 +18,54 @@ export interface AdminQueryState<T> {
  * permission failures are not reinterpreted here; existing session/API handling
  * and page permission guards remain authoritative.
  */
-export function useAdminQuery<T>(fetcher: () => Promise<T>): AdminQueryState<T> {
+export function useAdminQuery<T>(
+  fetcher: (signal: AbortSignal) => Promise<T>,
+  enabled = true,
+): AdminQueryState<T> {
   const [data, setData] = useState<T | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const requestGate = useRef(createQueryRequestGate());
 
   useEffect(() => {
+    if (!enabled) {
+      requestGate.current.cancel();
+      setLoading(false);
+      setError(null);
+      setData(undefined);
+      return;
+    }
+
     let active = true;
+    const request = requestGate.current.begin();
     setLoading(true);
     setError(null);
     setData(undefined);
-    fetcher()
+    fetcher(request.signal)
       .then((result) => {
-        if (active) setData(result);
+        if (active && request.isCurrent()) setData(result);
       })
       .catch((err: unknown) => {
-        if (active)
+        if (active && request.isCurrent())
           setError(err instanceof Error ? err.message : "Request failed");
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && request.isCurrent()) setLoading(false);
       });
     return () => {
       active = false;
+      request.cancel();
     };
-  }, [fetcher, attempt]);
+  }, [fetcher, attempt, enabled]);
 
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
+  const cancel = useCallback(() => {
+    requestGate.current.cancel();
+    setData(undefined);
+    setError(null);
+    setLoading(false);
+  }, []);
 
-  return { data, loading, error, retry };
+  return { data, loading, error, retry, cancel };
 }

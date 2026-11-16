@@ -20,6 +20,8 @@ export interface ResourceDefinition {
   fields: ResourceField[];
   paginated?: boolean;
   search?: boolean;
+  searchPath?: string;
+  searchTitleKey?: string;
   detailPath?: string;
   note?: string;
   filters?: { key: string; label: string; options: string[]; defaultValue?: string; allValue?: string; allLabel?: string }[];
@@ -52,74 +54,75 @@ export function invalidResponse(endpoint: string): never {
 export const resources = {
   users: {
     title: "Talent & user accounts", endpoint: "/users", envelope: "users", permission: "users.view",
-    paginated: true, search: true, detailPath: "/users",
+    paginated: true, search: true, searchPath: "/users", searchTitleKey: "name", detailPath: "/users",
     fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email (server-authorised)" }, { key: "accountType", label: "Account type" }, { key: "status", label: "Status", format: "status" }, { key: "emailVerified", label: "Email verified" }, { key: "createdAt", label: "Registered", format: "date" }],
     filters: [{ key: "status", label: "Status", options: ["Active", "Restricted", "Suspended", "Deactivated"] }, { key: "accountType", label: "Type", options: ["talent", "employer", "admin", "not_onboarded"] }],
     note: "Account type is derived the same way the platform routes users: an active company membership makes an employer, a talent profile makes talent, administrator emails are admin, and anyone with neither has not finished onboarding. Identity, qualification, profile completeness, plan and last-active data are not supplied by the user API. Email verification is not identity verification.",
   },
   companies: {
     title: "Company directory", endpoint: "/companies", envelope: "companies", permission: "companies.view",
-    paginated: true, search: true, detailPath: "/companies",
+    paginated: true, search: true, searchPath: "/companies", searchTitleKey: "name", detailPath: "/companies",
     fields: [{ key: "name", label: "Company" }, { key: "industry", label: "Industry" }, { key: "country", label: "Country" }, { key: "verification_status", label: "Verification", format: "status" }, { key: "representative_name", label: "Representative" }, { key: "created_at", label: "Registered", format: "date" }],
     filters: [{ key: "verificationStatus", label: "Verification", options: ["UNVERIFIED", "PENDING_REVIEW", "VERIFIED", "REJECTED"] }],
   },
   verification: {
     title: "Company verification", endpoint: "/verification", envelope: "queue", permission: "companies.view",
-    paginated: true, detailPath: "/verification",
+    paginated: true, search: true, searchPath: "/verification", searchTitleKey: "company.name", detailPath: "/verification",
     fields: [{ key: "company.name", label: "Company" }, { key: "status", label: "Decision", format: "status" }, { key: "reviewer_id", label: "Reviewer ID" }, { key: "created_at", label: "Submitted", format: "date" }],
     filters: [{ key: "status", label: "Status", options: ["OPEN", "PENDING_REVIEW", "MORE_INFO_REQUIRED", "APPROVED", "REJECTED"], defaultValue: "OPEN", allValue: "ALL", allLabel: "All decisions" }],
   },
   listings: {
     title: "Jobs & internships", endpoint: "/listings", envelope: "listings", permission: "listings.view",
-    paginated: true, search: true, detailPath: "/listings",
+    paginated: true, search: true, searchPath: "/listings", searchTitleKey: "title", detailPath: "/listings",
     fields: [{ key: "title", label: "Listing" }, { key: "company.name", label: "Company" }, { key: "external_company_name", label: "External company" }, { key: "source_type", label: "Source" }, { key: "opportunity_type", label: "Type" }, { key: "work_arrangement", label: "Arrangement" }, { key: "status", label: "Publication", format: "status" }, { key: "moderation_status", label: "Moderation", format: "status" }, { key: "created_at", label: "Created", format: "date" }],
     filters: [{ key: "moderationStatus", label: "Moderation", options: ["Pending", "Approved", "Rejected", "Flagged"] }],
     note: "The list API does not provide application totals, expiry dates or report counts. Publication status and moderation status are separate backend fields.",
   },
   applications: {
     title: "Applications", endpoint: "/applications", envelope: "applications", permission: "recruitment.view",
-    paginated: true,
+    paginated: true, search: true, searchPath: "/applications", searchTitleKey: "talent.name",
     fields: [{ key: "talent.name", label: "Candidate", href: (r) => typeof r.talent_id === "string" ? `/users/${encodeURIComponent(r.talent_id)}` : undefined }, { key: "opportunity.title", label: "Opportunity", href: (r) => typeof r.opportunity_id === "string" ? `/listings/${encodeURIComponent(r.opportunity_id)}` : undefined }, { key: "current_stage", label: "Stage", format: "status" }, { key: "ai_match_score", label: "Recorded match score" }, { key: "applied_at", label: "Applied", format: "date" }],
     filters: [{ key: "stage", label: "Stage", options: ["New", "Shortlisted", "Interview", "Offer", "Hired", "Rejected"] }],
     note: "Read-only oversight. Application stage changes and employer outreach are not implemented in the admin API.",
   },
   placements: {
     title: "Recorded hires & placements", endpoint: "/placements", envelope: "placements", permission: "recruitment.view", alternativePermission: "placements.manage",
-    paginated: true,
+    paginated: true, search: true, searchPath: "/placements", searchTitleKey: "talent.name",
     fields: [{ key: "talent.name", label: "Candidate" }, { key: "opportunity.title", label: "Opportunity" }, { key: "opportunity.external_company_name", label: "External company" }, { key: "current_stage", label: "Stage", format: "status" }, { key: "hired_at", label: "Hired at", format: "date" }],
     note: "These are applications whose recorded stage is Hired. Engagement completion, employment conversion, supervisor allocation and payment status are not supplied by this endpoint.",
   },
   workspaces: {
     title: "SquadCot workspaces", endpoint: "/workspaces", envelope: "workspaces", permission: "workspaces.view",
-    paginated: true, search: true, detailPath: "/workspaces",
+    paginated: true, search: true, searchPath: "/workspaces", searchTitleKey: "name", detailPath: "/workspaces",
     fields: [{ key: "name", label: "Workspace" }, { key: "company_name", label: "Company" }, { key: "plan_tier", label: "Plan" }, { key: "seats_used", label: "Seats used" }, { key: "seat_quota", label: "Seat quota" }, { key: "status", label: "Status", format: "status" }, { key: "last_synced_at", label: "Last synced", format: "date" }],
     filters: [{ key: "status", label: "Status", options: ["Active", "Suspended", "Over_Quota", "Provisioning_Error"] }],
     note: "Member lists, projects, reports, onboarding and individual access issues are not exposed by the admin API.",
   },
   feedback: {
     title: "Bug reports & feature ideas", endpoint: "/feedback", envelope: "feedback", permission: "support.view",
-    paginated: true, search: true, detailPath: "/feedback",
+    paginated: true, search: true, searchPath: "/feedback", searchTitleKey: "title", detailPath: "/feedback",
     fields: [{ key: "reference", label: "Reference" }, { key: "title", label: "Title" }, { key: "type", label: "Type" }, { key: "portal", label: "Portal" }, { key: "severity", label: "Severity" }, { key: "status", label: "Status", format: "status" }, { key: "submitter.name", label: "Submitted by" }, { key: "created_at", label: "Submitted", format: "date" }],
     filters: [{ key: "type", label: "Type", options: ["bug", "feature"] }, { key: "status", label: "Status", options: ["New", "Triaged", "Planned", "Resolved", "Declined"] }, { key: "portal", label: "Portal", options: ["talent", "employer"] }],
     note: "Submitted by talent and employers from the account menu. Search matches the reference, title and description. Severity applies to bug reports only.",
   },
   mentors: {
-    title: "Mentor directory", endpoint: "/mentors", envelope: "mentors", permission: "mentors.manage", paginated: true, search: true,
+    title: "Mentor directory", endpoint: "/mentors", envelope: "mentors", permission: "mentors.manage", paginated: true, search: true, searchPath: "/mentors", searchTitleKey: "name",
     fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "status", label: "Account status", format: "status" }, { key: "createdAt", label: "Registered", format: "date" }],
     note: "Bookings, actual availability, ratings, assigned mentees and payouts are unavailable. The endpoint's baseline assignment counts are deliberately not displayed.",
   },
   supervisors: {
-    title: "Supervisor directory", endpoint: "/supervisors", envelope: "supervisors", permission: "supervisors.manage", paginated: true, search: true,
+    title: "Supervisor directory", endpoint: "/supervisors", envelope: "supervisors", permission: "supervisors.manage", paginated: true, search: true, searchPath: "/supervisors", searchTitleKey: "name",
     fields: [{ key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "status", label: "Account status", format: "status" }, { key: "createdAt", label: "Registered", format: "date" }],
     note: "Allocation requests, actual student counts, invitations and supervisor actions are unavailable. The endpoint's baseline student counts are deliberately not displayed.",
   },
   plans: {
-    title: "Subscription plans", endpoint: "/plans", envelope: "plans", permission: "finance.view",
-    fields: [{ key: "name", label: "Plan" }, { key: "audience", label: "Audience" }, { key: "priceMonthly", label: "Monthly price", format: "money" }, { key: "currency", label: "Currency" }, { key: "status", label: "Status", format: "status" }, { key: "entitlements", label: "Configured entitlements" }],
-    note: "Read-only backend plan configuration. Price edits, plan assignment and entitlement changes are not implemented in the admin API.",
+    title: "Subscription plans", endpoint: "/plans", envelope: "plans", permission: "plans.manage", alternativePermission: "finance.view",
+    fields: [{ key: "name", label: "Plan" }, { key: "code", label: "Billing code" }, { key: "audience", label: "Audience" }, { key: "price_monthly", label: "Monthly price (major units)", format: "money" }, { key: "currency", label: "Currency" }, { key: "is_active", label: "Active" }, { key: "updated_at", label: "Last changed", format: "date" }],
+    filters: [{ key: "audience", label: "Audience", options: ["talent", "employer"] }],
+    note: "Live billing catalogue, including inactive tiers. plans.manage can edit every tier's price and existing typed limits with an audited reason; finance.view alone is read-only. Null means not configured, never unlimited. Subscriber totals are not supplied. Billing seeds missing tiers without overwriting configured values; an empty catalogue is not replaced with sample data.",
   },
   transactions: {
-    title: "Transaction ledger", endpoint: "/finance/transactions", envelope: "transactions", permission: "finance.view", paginated: true, search: true,
+    title: "Transaction ledger", endpoint: "/finance/transactions", envelope: "transactions", permission: "finance.view", paginated: true, search: true, searchPath: "/transactions", searchTitleKey: "id",
     fields: [{ key: "id", label: "Transaction" }, { key: "payer", label: "Payer" }, { key: "payee", label: "Payee" }, { key: "category", label: "Category" }, { key: "gross", label: "Gross", format: "money" }, { key: "fee", label: "Fee", format: "money" }, { key: "net", label: "Net", format: "money" }, { key: "currency", label: "Currency" }, { key: "provider", label: "Provider" }, { key: "providerRef", label: "Provider reference" }, { key: "status", label: "Status", format: "status" }, { key: "createdAt", label: "Created", format: "date" }],
     filters: [{ key: "status", label: "Status", options: ["Successful", "Failed", "Pending", "Refunded", "Disputed", "Reversed"] }],
     note: "Refunds, receipt generation, payouts, escrow and wallet actions have no admin endpoints and are unavailable.",
@@ -130,7 +133,7 @@ export const resources = {
     filters: [{ key: "status", label: "Status", options: ["Unresolved", "Settled", "Written_Off", "Escalated"] }],
   },
   audit: {
-    title: "Audit logs", endpoint: "/audit-logs", envelope: "logs", permission: "audit.view", paginated: true, search: true,
+    title: "Audit logs", endpoint: "/audit-logs", envelope: "logs", permission: "audit.view", paginated: true, search: true, searchPath: "/audit-logs", searchTitleKey: "action",
     fields: [{ key: "createdAt", label: "When", format: "date" }, { key: "actorName", label: "Who" }, { key: "actorRole", label: "Role" }, { key: "action", label: "Action" }, { key: "entityType", label: "Entity type" }, { key: "entityId", label: "Entity ID" }, { key: "outcome", label: "Outcome", format: "status" }, { key: "ipAddress", label: "IP address" }, { key: "reason", label: "Reason" }],
     filters: [
       { key: "outcome", label: "Outcome", options: ["Success", "Failed"] },
@@ -149,8 +152,12 @@ export const resources = {
   },
 } satisfies Record<string, ResourceDefinition>;
 
-export async function fetchCollection(resource: ResourceDefinition, params: QueryParams = {}): Promise<CollectionResult> {
-  const response = await apiClient.get<unknown>(resource.endpoint, { params });
+export async function fetchCollection(
+  resource: ResourceDefinition,
+  params: QueryParams = {},
+  signal?: AbortSignal,
+): Promise<CollectionResult> {
+  const response = await apiClient.get<unknown>(resource.endpoint, { params, signal });
   if (!isRecord(response) || response.success !== true) invalidResponse(resource.endpoint);
   const records = response[resource.envelope];
   if (!Array.isArray(records) || !records.every((record) => isRecord(record) && recordId(record))) {

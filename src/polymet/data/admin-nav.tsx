@@ -105,7 +105,7 @@ export const ADMIN_NAV: NavSection[] = [
   {
     title: "Commercial",
     items: [
-      { title: "Plans & entitlements", href: "/plans", icon: PackageIcon, permission: "finance.view" },
+      { title: "Plans & entitlements", href: "/plans", icon: PackageIcon, permission: "plans.manage", alternativePermission: "finance.view" },
       { title: "Subscriptions", href: "/subscriptions", icon: RepeatIcon, permission: "finance.view" },
       { title: "Payments & transactions", href: "/transactions", icon: ReceiptIcon, permission: "finance.view" },
       { title: "Reconciliation", href: "/reconciliation", icon: ScaleIcon, permission: "finance.view" },
@@ -128,7 +128,7 @@ export const ADMIN_NAV: NavSection[] = [
       { title: "Notifications", href: "/notifications", icon: BellIcon, permission: "notifications.manage" },
       { title: "Support tickets", href: "/support", icon: LifeBuoyIcon, permission: "support.view" },
       { title: "Bug reports & ideas", href: "/feedback", icon: BugIcon, permission: "support.view" },
-      { title: "Disputes", href: "/disputes", icon: GavelIcon, permission: "disputes.manage" },
+      { title: "Disputes", href: "/disputes", icon: GavelIcon, permission: "support.view" },
       { title: "Reports & escalations", href: "/support/escalations", icon: SirenIcon, permission: "support.view" },
       { title: "Audit logs", href: "/audit-logs", icon: ScrollTextIcon, permission: "audit.view" },
       { title: "Analytics & reporting", href: "/analytics", icon: BarChart3Icon, permission: "analytics.view" },

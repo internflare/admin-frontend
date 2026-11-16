@@ -46,6 +46,7 @@ export default function LoginPage() {
           </div>
           {email === null ? (
             <LoginEmailStep
+              defaultEmail={(new URLSearchParams(location.search).get("email") ?? "").slice(0, 254)}
               onSubmit={async (value) => {
                 const res = await requestCode(value);
                 if (!res.ok) return res.error;
@@ -75,7 +76,7 @@ export default function LoginPage() {
           <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
             <p className="font-medium text-foreground">Passwordless Email Delivery</p>
             <p className="mt-0.5 leading-relaxed">
-              Single-use 6-digit codes are emailed only after an active administrator account is found in the database. Codes expire after 5 minutes.
+              Single-use 6-digit codes are emailed only to active or invited administrators. Verifying your first code accepts your invitation. Codes expire after 5 minutes.
             </p>
           </div>
           <p className="text-center text-[11px] text-muted-foreground">Need access? Ask a super administrator to send you an invitation.</p>

@@ -9,7 +9,7 @@ import { ResourcePage } from "@/polymet/components/resource-page";
 import { UnavailablePage } from "@/polymet/components/unavailable-page";
 import { PermissionGuard } from "@/polymet/components/permission-controls";
 import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
-import { ChangeRoleAction, RolePermissionMatrix } from "@/polymet/components/admin-role-management";
+import { AdminInvitationAction, ChangeRoleAction, PlanManagementAction, RolePermissionMatrix } from "@/polymet/components/admin-role-management";
 import { ADMIN_ROLES } from "@/polymet/data/admin-roles";
 import { fetchRoleMatrix, mutateAdmin, resources } from "@/polymet/lib/admin-service";
 import { useAdminQuery } from "@/polymet/lib/use-admin-query";
@@ -43,22 +43,30 @@ function AdminsTab() {
   return (
       <>
         <ResourcePage key={revision} resource={resources.admins} rowActions={(record) => (
-          <ChangeRoleAction record={record} currentAdminId={admin?.id} roles={roles.data} onChanged={() => setRevision((value) => value + 1)} />
+          <div className="flex flex-wrap items-start gap-2">
+            <ChangeRoleAction record={record} currentAdminId={admin?.id} roles={roles.data} onChanged={() => setRevision((value) => value + 1)} />
+            <PlanManagementAction record={record} isSuperAdmin={admin?.roleId === "super_admin"} onChanged={() => setRevision((value) => value + 1)} />
+            <AdminInvitationAction record={record} onChanged={() => setRevision((value) => value + 1)} />
+          </div>
         )} />
         <RolePermissionMatrix roles={roles} />
-        <SectionCard title="Invite administrator" description="Creates an invitation through the backend. Success confirms the invitation record, not email delivery.">
+        <SectionCard title="Invite administrator" description="Only unused email addresses can be invited. Email is queued for delivery; the invitee activates access by verifying a single-use sign-in code. Pending invitations can be resent from the table.">
           <form className="max-w-xl space-y-3" onSubmit={async (event) => {
             event.preventDefault();
             if (submitting) return;
             await run(async () => {
-              await mutateAdmin("/settings/admins/invite", { name: name.trim(), email: email.trim(), roleId });
-              toast.success("Administrator invitation recorded by the backend");
-              setName(""); setEmail(""); setRoleId(""); setRevision((value) => value + 1);
+              try {
+                await mutateAdmin("/settings/admins/invite", { name: name.trim(), email: email.trim(), roleId });
+                toast.success("Administrator invitation email queued for delivery");
+                setName(""); setEmail(""); setRoleId("");
+              } finally {
+                setRevision((value) => value + 1);
+              }
             });
           }}>
             <div className="space-y-1"><Label htmlFor="admin-name">Name</Label><Input id="admin-name" minLength={2} required value={name} onChange={(event) => setName(event.target.value)} disabled={submitting} /></div>
             <div className="space-y-1"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={submitting} /></div>
-            <div className="space-y-1"><Label htmlFor="admin-role">Role</Label><select id="admin-role" className="block w-full rounded-md border bg-background p-2 text-sm" required value={roleId} onChange={(event) => setRoleId(event.target.value)} disabled={submitting}><option value="" disabled>Select a role</option>{ADMIN_ROLES.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></div>
+            <div className="space-y-1"><Label htmlFor="admin-role">Role</Label><select id="admin-role" className="block w-full rounded-md border bg-background p-2 text-sm" required value={roleId} onChange={(event) => setRoleId(event.target.value)} disabled={submitting}><option value="" disabled>Select a role</option>{ADMIN_ROLES.filter((role) => role.id !== "super_admin").map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={submitting || !name.trim() || !email.trim() || !roleId}>{submitting ? "Submitting…" : "Invite administrator"}</Button>
           </form>

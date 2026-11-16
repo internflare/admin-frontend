@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, SearchIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, ErrorState, TableSkeleton } from "@/polymet/components/state-views";
@@ -26,8 +25,6 @@ interface DataTableProps<T> {
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
-  searchPlaceholder?: string;
-  getSearchText?: (row: T) => string;
   toolbar?: ReactNode;
   rowActions?: (row: T) => ReactNode;
   onRowClick?: (row: T) => void;
@@ -42,21 +39,16 @@ interface DataTableProps<T> {
 }
 
 export function DataTable<T>({
-  data, columns, getRowId, loading, error, onRetry, searchPlaceholder = "Search…", getSearchText, toolbar,
+  data, columns, getRowId, loading, error, onRetry, toolbar,
   rowActions, onRowClick, pageSize: initialPageSize = 10, emptyTitle = "No records match", emptyDescription = "Try adjusting search or filters.",
   emptyAction, initialSort, className, dense, serverPaginated,
 }: DataTableProps<T>) {
-  const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(initialSort ?? null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(initialPageSize);
 
   const processed = useMemo(() => {
     let rows = data ?? [];
-    if (query && getSearchText) {
-      const q = query.toLowerCase();
-      rows = rows.filter((r) => getSearchText(r).toLowerCase().includes(q));
-    }
     if (sort) {
       const col = columns.find((c) => c.key === sort.key);
       if (col?.sortValue) {
@@ -72,7 +64,7 @@ export function DataTable<T>({
       }
     }
     return rows;
-  }, [data, query, sort, columns, getSearchText]);
+  }, [data, sort, columns]);
 
   const pageCount = Math.max(1, Math.ceil(processed.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
@@ -84,24 +76,9 @@ export function DataTable<T>({
 
   return (
     <div className={cn("overflow-hidden rounded-lg border bg-card shadow-xs", className)}>
-      {(getSearchText || toolbar) && (
+      {toolbar && (
         <div className="flex flex-col gap-2 border-b p-3 lg:flex-row lg:items-center">
-          {getSearchText && (
-            <div className="relative w-full lg:max-w-xs">
-              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setPage(0);
-                }}
-                placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
-                className="h-8 pl-8 text-sm"
-              />
-            </div>
-          )}
-          {toolbar && <div className="flex flex-1 flex-wrap items-center gap-2">{toolbar}</div>}
+          <div className="flex flex-1 flex-wrap items-center gap-2">{toolbar}</div>
         </div>
       )}
 

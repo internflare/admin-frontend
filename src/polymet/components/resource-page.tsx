@@ -9,7 +9,9 @@ import { PermissionButton, PermissionGuard } from "@/polymet/components/permissi
 import { ConfirmActionDialog } from "@/polymet/components/confirm-action-dialog";
 import { StatusBadge } from "@/polymet/components/status-badge";
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
+import { Spinner } from "@/components/ui/spinner";
 import { useAdminQuery } from "@/polymet/lib/use-admin-query";
+import { useAdminSearch } from "@/polymet/lib/use-admin-search";
 import { fieldValue, fetchCollection, mutateAdmin, recordId, type AdminRecord, type QueryParams, type ResourceDefinition, type ResourceField } from "@/polymet/lib/admin-service";
 
 export function displayValue(value: unknown): string {
@@ -55,17 +57,16 @@ function ResourceContent({ resource, initialParams, title, actions, summary, row
 }) {
   const [page, setPage] = useState(1);
   const [searchParams] = useSearchParams();
-  const [search, setSearch] = useState(resource.search ? searchParams.get("search") ?? "" : "");
-  const [query, setQuery] = useState(search);
+  const search = useAdminSearch(resource.search ? searchParams.get("search") ?? "" : "", true);
   const [filters, setFilters] = useState<QueryParams>(() => Object.fromEntries(
     (resource.filters ?? []).filter((filter) => filter.defaultValue && initialParams[filter.key] === undefined).map((filter) => [filter.key, filter.defaultValue]),
   ));
   const [selected, setSelected] = useState<AdminRecord | null>(null);
   const [resolution, setResolution] = useState("Settled");
   const [featureState, setFeatureState] = useState("Disabled");
-  const paramsKey = JSON.stringify({ ...initialParams, ...filters, ...(resource.search ? { search: query } : {}), page, limit: 20 });
-  const fetcher = useCallback(() => fetchCollection(resource, JSON.parse(paramsKey)), [resource, paramsKey]);
-  const result = useAdminQuery(fetcher);
+  const paramsKey = JSON.stringify({ ...initialParams, ...filters, ...(resource.search ? { search: search.state.query } : {}), page, limit: 20 });
+  const fetcher = useCallback((signal: AbortSignal) => fetchCollection(resource, JSON.parse(paramsKey), signal), [resource, paramsKey]);
+  const result = useAdminQuery(fetcher, !resource.search || search.state.phase === "ready");
   const pagination = result.data?.pagination;
   const reconciliation = resource.endpoint === "/finance/reconciliation";
   const features = resource.endpoint === "/settings/features";
@@ -73,35 +74,54 @@ function ResourceContent({ resource, initialParams, title, actions, summary, row
   return (
     <div className="space-y-5">
       <PageHeader title={title ?? resource.title} description="Live backend records. Missing fields are labelled; failed requests are never replaced with sample data." actions={
-        <><Button variant="outline" size="sm" onClick={result.retry} disabled={result.loading}>Refresh</Button>{actions}</>
+        <><Button variant="outline" size="sm" onClick={result.retry} disabled={result.loading || (resource.search && search.state.phase !== "ready")}>Refresh</Button>{actions}</>
       } />
       {summary}
       {resource.note && <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">{resource.note}</p>}
       {resource.search && (
-        <form className="flex max-w-lg gap-2" onSubmit={(event) => { event.preventDefault(); setPage(1); setQuery(search.trim()); }}>
-          <Input aria-label={`Search ${resource.title}`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search backend records…" />
-          <Button type="submit" variant="outline">Search</Button>
-        </form>
+        <div className="max-w-lg space-y-1">
+          <Input
+            aria-label={`Search ${resource.title}`}
+            value={search.input}
+            onChange={(event) => {
+              setPage(1);
+              result.cancel();
+              search.update(event.target.value);
+            }}
+            placeholder="Search backend records (3–100 characters)…"
+          />
+          {search.state.phase === "pending" && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+              <Spinner aria-label="Waiting to search" /> Searching after 5 seconds of inactivity…
+            </p>
+          )}
+          {search.state.phase === "too-short" && <p className="text-xs text-muted-foreground" role="status">Enter at least 3 characters. Short searches are not sent.</p>}
+          {search.state.phase === "too-long" && <p className="text-xs text-destructive" role="alert">Search must be 100 characters or fewer.</p>}
+        </div>
       )}
-      <DataTable
-        data={result.data?.records} loading={result.loading} error={result.error} onRetry={result.retry}
-        pageSize={resource.paginated ? 20 : 25} serverPaginated={resource.paginated} getRowId={recordId}
-        emptyTitle="No records returned" emptyDescription="The backend successfully returned no records for this query."
-        columns={resource.fields.map((field) => ({ key: field.key, header: field.label, cell: (record: AdminRecord) => <FieldValue record={record} field={field} /> }))}
-        toolbar={resource.filters?.map((filter) => {
-          const current = filters[filter.key] ?? initialParams[filter.key];
-          return (
-            <FilterSelect key={filter.key} label={filter.label} allLabel={filter.allLabel}
-              value={current === undefined || (filter.allValue !== undefined && current === filter.allValue) ? "all" : String(current)}
-              options={filter.options} onChange={(value) => { setFilters((previous) => ({ ...previous, [filter.key]: value === "all" ? filter.allValue : value })); setPage(1); }} />
-          );
-        })}
-        rowActions={rowActions ? (record) => rowActions(record, result.retry) : resource.detailPath || reconciliation || features ? (record) => (
-          resource.detailPath ? <Button asChild size="sm" variant="outline"><Link to={`${resource.detailPath}/${encodeURIComponent(recordId(record))}`}>View record</Link></Button>
-            : features ? <PermissionButton permission="system.manage" variant="outline" size="sm" disabled={record.isLocked === true || typeof record.key !== "string"} onClick={() => { setSelected(record); setFeatureState(String(record.state)); }}>Change state…</PermissionButton>
-            : <PermissionButton permission="finance.manage" variant="outline" size="sm" disabled={record.status !== "Unresolved" || typeof record.id !== "string"} onClick={() => setSelected(record)}>Resolve…</PermissionButton>
-        ) : undefined}
-      />
+      {!resource.search || search.state.phase === "ready" ? (
+        <DataTable
+          data={result.data?.records} loading={result.loading} error={result.error} onRetry={result.retry}
+          pageSize={resource.paginated ? 20 : 25} serverPaginated={resource.paginated} getRowId={recordId}
+          emptyTitle="No records returned" emptyDescription="The backend successfully returned no records for this query."
+          columns={resource.fields.map((field) => ({ key: field.key, header: field.label, cell: (record: AdminRecord) => <FieldValue record={record} field={field} /> }))}
+          toolbar={resource.filters?.map((filter) => {
+            const current = filters[filter.key] ?? initialParams[filter.key];
+            return (
+              <FilterSelect key={filter.key} label={filter.label} allLabel={filter.allLabel}
+                value={current === undefined || (filter.allValue !== undefined && current === filter.allValue) ? "all" : String(current)}
+                options={filter.options} onChange={(value) => { setFilters((previous) => ({ ...previous, [filter.key]: value === "all" ? filter.allValue : value })); setPage(1); }} />
+            );
+          })}
+          rowActions={rowActions ? (record) => rowActions(record, result.retry) : resource.detailPath || reconciliation || features ? (record) => (
+            resource.detailPath ? <Button asChild size="sm" variant="outline"><Link to={`${resource.detailPath}/${encodeURIComponent(recordId(record))}`}>View record</Link></Button>
+              : features ? <PermissionButton permission="system.manage" variant="outline" size="sm" disabled={record.isLocked === true || typeof record.key !== "string"} onClick={() => { setSelected(record); setFeatureState(String(record.state)); }}>Change state…</PermissionButton>
+              : <PermissionButton permission="finance.manage" variant="outline" size="sm" disabled={record.status !== "Unresolved" || typeof record.id !== "string"} onClick={() => setSelected(record)}>Resolve…</PermissionButton>
+          ) : undefined}
+        />
+      ) : search.state.phase === "pending" ? (
+        <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground"><Spinner aria-label="Searching backend" /> Waiting for an idle search query…</div>
+      ) : null}
       {!result.loading && !result.error && pagination && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <span>{pagination.total.toLocaleString()} matching records · Page {pagination.page} of {pagination.totalPages}</span>

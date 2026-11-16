@@ -1,5 +1,33 @@
 # Welcome to your Polymet AI project
 
+## Admin invitations and tier privileges
+
+The Admins & roles table can resend pending invitations and shows each admin's
+tier-management access. Used email addresses are rejected across account
+categories. Invitation success means the email was queued; provider failures are
+retried by notification-service. Invitees activate access by requesting and
+verifying a single-use code at the admin login link. Use **Resend invitation** for
+old pending records whose original emails were not delivered.
+
+Super admins and finance staff can edit tier prices/limits. Only a super admin
+can grant or revoke tier management for other roles, with a reason and explicit
+confirmation. The role matrix shows role defaults; per-admin grants are separate.
+
+## Disputes workflow
+
+Disputes now uses persistent `/disputes` list/detail/create APIs, with server
+status/priority filters and pagination. Search reuses the shared 3-character,
+5000ms idle-delay/cancellation lifecycle. Read access is `support.view`; create,
+assign/reassign, internal notes, evidence URL references, escalation and final
+resolution require `disputes.manage`. Optional user/application links use real
+lookups; assignment lists only active administrators. Application lookup requires
+an exact application ID. Every write includes a reason and existing cases include
+their version; conflicting updates require refreshing the case.
+
+Evidence is explicitly an external HTTPS URL reference with a description, not a
+file upload. Resolved cases are read-only and resolution performs no refund or
+account action. No sample cases or client-only successful changes are supplied.
+
 ## Browser security
 
 The deployed `_headers` Content Security Policy permits same-origin scripts only
@@ -79,6 +107,23 @@ their detail views locate the requested record in the paginated directory.
 Related application/listing queries require valid backend-supported ObjectIds,
 rather than risking an ignored filter and showing unrelated records.
 
+Search trims input and only sends non-empty queries of 3–100 characters after
+5000ms (5 seconds) without typing. Short and overlong queries are not sent;
+clearing a resource search reloads its normal list after the same idle delay.
+Search runs against authorized backend directories (users, companies, verification,
+listings, applications, placements, workspaces, mentors, supervisors, feedback,
+transactions and audit logs), preserving active filters and resetting to page
+one. Obsolete requests are cancelled; failures remain visible with retry.
+Global search checks permissions before calling the matching collection route:
+`/users` (`users.view`), `/companies` and `/verification` (`companies.view`),
+`/listings` (`listings.view`), `/applications` (`recruitment.view`),
+`/placements` (`recruitment.view` or `placements.manage`), `/workspaces`
+(`workspaces.view`), `/mentors` (`mentors.manage`), `/supervisors`
+(`supervisors.manage`), `/feedback` (`support.view`),
+`/finance/transactions` (`finance.view`) and `/audit-logs` (`audit.view`).
+Domains without a backend search contract, including plans, reconciliation and admin
+settings, are not searched or replaced with local/demo results.
+
 Mutations require explicit confirmation and use backend outcomes; failed
 changes stay open with an error. Reconciliation records an outcome, not a
 refund/payment. Feature changes edit recorded configuration, not verified
@@ -94,7 +139,7 @@ aggregated alerts/action queues, unread counts, user invitation/access-case
 queues, portfolio/readiness oversight, workspace projects/reports/onboarding,
 subscriptions and subscription details, external-source configuration and
 sync/import monitoring, AI usage/matching oversight, notification delivery and
-templates, support/escalations/disputes, and general platform/security policy
+templates, support tickets/escalations, and general platform/security policy
 editing. Mentor/supervisor assignment counts and availability are not inferred
 from account status. Placement records are recorded hires, not completed
 engagements or verified employment outcomes.

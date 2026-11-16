@@ -37,11 +37,12 @@ interface ConfirmActionDialogProps {
   requireAcknowledgement?: boolean;
   onConfirm: (payload: ConfirmActionPayload) => void | Promise<void>;
   children?: ReactNode;
+  contentClassName?: string;
 }
 
 export function ConfirmActionDialog({
   open, onOpenChange, title, description, target, consequences = [], confirmLabel = "Confirm",
-  destructive, requireReason = true, reasonOptions, requireAcknowledgement, onConfirm, children,
+  destructive, requireReason = true, reasonOptions, requireAcknowledgement, onConfirm, children, contentClassName,
 }: ConfirmActionDialogProps) {
   const { role } = useAdminRole();
   const { admin } = useAdminAuth();
@@ -70,7 +71,7 @@ export function ConfirmActionDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={cn("sm:max-w-lg", contentClassName)}>
         <DialogHeader>
           <div className="flex items-start gap-3">
             <span

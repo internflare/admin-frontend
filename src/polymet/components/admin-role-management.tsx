@@ -1,6 +1,8 @@
 import { Fragment, useState } from "react";
 import { CheckIcon, MinusIcon } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { useAdminMutation } from "@/polymet/lib/use-admin-mutation";
 import { PermissionButton } from "@/polymet/components/permission-controls";
 import { ConfirmActionDialog } from "@/polymet/components/confirm-action-dialog";
 import { SectionCard } from "@/polymet/components/section-card";
@@ -28,7 +30,7 @@ function groupPermissions(): { area: string; permissions: Permission[] }[] {
 
 export function RolePermissionMatrix({ roles }: { roles: AdminQueryState<RoleMatrixEntry[]> }) {
   return (
-    <SectionCard title="Role permission matrix" description="What each role is allowed to do, exactly as the backend enforces it. Counts show how many administrators currently hold each role.">
+    <SectionCard title="Role permission matrix" description="Default permissions enforced for each role. Individually delegated tier-management privileges are shown in the admin table; only a super administrator can change them.">
       {roles.loading ? <LoadingState label="Loading role permissions" className="py-10" />
         : roles.error || !roles.data ? <ErrorState title="Couldn't load role permissions" description={roles.error ?? undefined} onRetry={roles.retry} />
         : <MatrixTable roles={roles.data} />}
@@ -94,6 +96,45 @@ function MatrixTable({ roles }: { roles: RoleMatrixEntry[] }) {
   );
 }
 
+export function AdminInvitationAction({ record, onChanged }: { record: AdminRecord; onChanged: () => void }) {
+  const { submitting, error, run } = useAdminMutation("The invitation email could not be queued.");
+  if (record.status !== "Invited") return null;
+  return <div className="space-y-1">
+    <Button size="sm" variant="outline" disabled={submitting} onClick={() => void run(async () => {
+      await mutateAdmin(`/settings/admins/${encodeURIComponent(recordId(record))}/resend-invite`, {});
+      toast.success("Invitation email queued for delivery");
+      onChanged();
+    })}>{submitting ? "Queuing..." : "Resend invitation"}</Button>
+    {error && <p role="alert" className="max-w-xs text-xs text-destructive">{error}</p>}
+  </div>;
+}
+
+export function PlanManagementAction({ record, isSuperAdmin, onChanged }: {
+  record: AdminRecord; isSuperAdmin: boolean; onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const included = record.roleId === "super_admin" || record.roleId === "finance";
+  const delegated = Array.isArray(record.customPermissions) && record.customPermissions.includes("plans.manage");
+  const eligible = record.status === "Active" || record.status === "Invited";
+  const label = included ? "Included with role" : delegated ? "Granted" : "Not granted";
+  return <div className="space-y-1">
+    <p className="text-xs text-muted-foreground">Tier management: {label}</p>
+    {isSuperAdmin && !included && eligible && <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      {delegated ? "Revoke tier management..." : "Grant tier management..."}
+    </Button>}
+    {open && <ConfirmActionDialog open onOpenChange={setOpen}
+      title={delegated ? "Revoke tier management" : "Grant tier management"}
+      description="This privilege controls editing every talent and employer tier price and its limits. Only a super administrator can grant or revoke it. The change is audited."
+      target={typeof record.name === "string" ? record.name : recordId(record)}
+      requireAcknowledgement confirmLabel={delegated ? "Revoke privilege" : "Grant privilege"}
+      onConfirm={async ({ note }) => {
+        await mutateAdmin(`/settings/admins/${encodeURIComponent(recordId(record))}/plan-management`, { enabled: !delegated, reason: note.trim() }, "patch");
+        toast.success(delegated ? "Tier-management privilege revoked" : "Tier-management privilege granted");
+        onChanged();
+      }} />}
+  </div>;
+}
+
 export function ChangeRoleAction({ record, currentAdminId, roles, onChanged }: {
   record: AdminRecord;
   currentAdminId?: string;
@@ -127,8 +168,13 @@ function ChangeRoleDialog({ record, roles, onClose, onChanged }: {
   const options = roles.filter((role) => role.id !== "super_admin" && role.id !== record.roleId);
   const [roleId, setRoleId] = useState<AdminRoleId | "">("");
   const next = roles.find((role) => role.id === roleId);
-  const gained = next ? next.permissions.filter((permission) => !current?.permissions.includes(permission)) : [];
-  const lost = next && current ? current.permissions.filter((permission) => !next.permissions.includes(permission)) : [];
+  const custom = Array.isArray(record.customPermissions)
+    ? record.customPermissions.filter((value): value is Permission => typeof value === "string" && value in PERMISSION_LABELS)
+    : [];
+  const currentPermissions = [...(current?.permissions ?? []), ...custom];
+  const nextPermissions = [...(next?.permissions ?? []), ...custom];
+  const gained = next ? nextPermissions.filter((permission) => !currentPermissions.includes(permission)) : [];
+  const lost = next && current ? currentPermissions.filter((permission) => !nextPermissions.includes(permission)) : [];
   const name = typeof record.name === "string" ? record.name : recordId(record);
 
   return (
