@@ -49,6 +49,12 @@ const AdminAuthContext = createContext<AdminAuthContextValue | undefined>(
   undefined,
 );
 
+/**
+ * Validate unknown session JSON before treating it as SignedInAdmin.
+ * The boolean type guard checks identity fields, a catalogued AdminRoleId and
+ * known Permission[] entries. Display labels or an arbitrary role string cannot
+ * supply frontend authority; invalid envelopes never hydrate an admin session.
+ */
 function isSignedInAdmin(value: unknown): value is SignedInAdmin {
   return (
     typeof value === "object" &&
@@ -73,11 +79,22 @@ function isSignedInAdmin(value: unknown): value is SignedInAdmin {
   );
 }
 
-// Provides authentication context for admin users, handling session hydration, OTP requests, verification, and sign-out.
+/**
+ * Own the isolated admin-session and email-OTP lifecycle for ReactNode children.
+ * Successful hydration/verification supplies SignedInAdmin and server permissions;
+ * request/verify methods return discriminated RequestResult/VerifyResult values
+ * so forms can display failures without blanking the OTP step. Session failures,
+ * sign-out and protected-request 401 events clear both identity and role claims.
+ */
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const { setRoleId, setPermissions } = useAdminRole();
   const [admin, setAdmin] = useState<SignedInAdmin | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
+
+  const clearIdentity = useCallback(() => {
+    setAdmin(null);
+    setRoleId(null);
+  }, [setRoleId]);
 
   const applyRole = useCallback(
     (signedIn: SignedInAdmin) => {
@@ -108,8 +125,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         if (isMounted) {
-          setAdmin(null);
-          setPermissions([]);
+          clearIdentity();
           if (!(error instanceof ApiError && error.status === 401)) {
             toast.error("Unable to verify your administrator session", {
               description:
@@ -128,8 +144,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
     // Listen to 401 events emitted by apiClient
     const handleUnauthorized = () => {
-      setAdmin(null);
-      setPermissions([]);
+      clearIdentity();
     };
 
     window.addEventListener("internflare:unauthorized", handleUnauthorized);
@@ -141,7 +156,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         handleUnauthorized,
       );
     };
-  }, [applyRole, setPermissions]);
+  }, [applyRole, clearIdentity]);
 
   // Request OTP: Dispatches single-use code to work email
   const requestCode = useCallback(
@@ -234,19 +249,17 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     try {
       await apiClient.post("/auth/sign-out", {});
-      setAdmin(null);
-      setPermissions([]);
+      clearIdentity();
       toast.info("Signed out", {
         description: "Your administrator session has ended.",
       });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        setAdmin(null);
-        setPermissions([]);
+        clearIdentity();
       }
       // The API client displays logout errors; do not claim server revocation succeeded.
     }
-  }, [setPermissions]);
+  }, [clearIdentity]);
 
   const value = useMemo(
     () => ({ admin, isLoadingSession, requestCode, verifyCode, signOut }),

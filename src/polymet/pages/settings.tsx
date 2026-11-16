@@ -13,6 +13,7 @@ import { ChangeRoleAction, RolePermissionMatrix } from "@/polymet/components/adm
 import { ADMIN_ROLES } from "@/polymet/data/admin-roles";
 import { fetchRoleMatrix, mutateAdmin, resources } from "@/polymet/lib/admin-service";
 import { useAdminQuery } from "@/polymet/lib/use-admin-query";
+import { useAdminMutation } from "@/polymet/lib/use-admin-mutation";
 
 type Tab = "platform" | "admins" | "features" | "security";
 
@@ -33,8 +34,7 @@ function AdminsTab() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { submitting, error, run } = useAdminMutation("The invitation was not confirmed.");
   const [revision, setRevision] = useState(0);
   const { admin } = useAdminAuth();
   // Re-fetched whenever an admin is invited or re-assigned so the per-role counts stay current.
@@ -50,14 +50,11 @@ function AdminsTab() {
           <form className="max-w-xl space-y-3" onSubmit={async (event) => {
             event.preventDefault();
             if (submitting) return;
-            setSubmitting(true); setError(null);
-            try {
+            await run(async () => {
               await mutateAdmin("/settings/admins/invite", { name: name.trim(), email: email.trim(), roleId });
               toast.success("Administrator invitation recorded by the backend");
               setName(""); setEmail(""); setRoleId(""); setRevision((value) => value + 1);
-            } catch (failure) {
-              setError(failure instanceof Error ? failure.message : "The invitation was not confirmed.");
-            } finally { setSubmitting(false); }
+            });
           }}>
             <div className="space-y-1"><Label htmlFor="admin-name">Name</Label><Input id="admin-name" minLength={2} required value={name} onChange={(event) => setName(event.target.value)} disabled={submitting} /></div>
             <div className="space-y-1"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={submitting} /></div>

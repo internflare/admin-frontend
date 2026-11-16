@@ -9,6 +9,7 @@
  */
 
 import { toast } from "sonner";
+import { serializeRequestBody } from "@/polymet/lib/request-body";
 
 const rawBase = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1/admin";
 export const API_BASE_URL = rawBase.replace(/\/+$/, "");
@@ -224,17 +225,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     headers.set("X-Correlation-ID", correlationId);
   }
 
-  let serializedBody: BodyInit | undefined;
-  if (body !== undefined && body !== null) {
-    if (typeof body === "string" || body instanceof FormData || body instanceof Blob) {
-      serializedBody = body as BodyInit;
-    } else {
-      if (!headers.has("Content-Type")) {
-        headers.set("Content-Type", "application/json");
-      }
-      serializedBody = JSON.stringify(body);
-    }
-  }
+  const serializedBody = serializeRequestBody(body, headers);
 
   try {
     const response = await fetch(url, {
@@ -304,17 +295,7 @@ export const apiClient = {
     const headers = new Headers(customHeaders);
     headers.set("X-Correlation-ID", generateCorrelationId());
 
-    let serializedBody: BodyInit | undefined;
-    if (body !== undefined && body !== null) {
-      if (typeof body === "string" || body instanceof FormData || body instanceof Blob) {
-        serializedBody = body as BodyInit;
-      } else {
-        if (!headers.has("Content-Type")) {
-          headers.set("Content-Type", "application/json");
-        }
-        serializedBody = JSON.stringify(body);
-      }
-    }
+    const serializedBody = serializeRequestBody(body, headers);
 
     return fetch(url, { ...fetchInit, headers, body: serializedBody, credentials: "include" });
   },

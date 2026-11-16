@@ -9,6 +9,21 @@ Document links accept HTTP(S) only, and chart style blocks do not inject HTML.
 Cloudflare hosting must serve these headers; Vite development/preview does not
 apply `_headers`. This security hardening does not add PWA support to the admin.
 
+## Shared transport and form workflows
+
+Managed requests and `apiClient.raw` share body serialization: JSON values get a
+default content type, while strings, Blob and FormData pass through. Raw requests
+still bypass managed error/toast handling; correlation headers and forced admin
+credentials retain their original rules.
+
+`useAdminQuery` remains the read lifecycle. Confirmation and invitation forms use
+`useAdminMutation` for submitting/inline-error state only; each form still owns
+validation, success/reset callbacks, permissions and retries. Incident and export
+workflows intentionally keep their toast/download-specific lifecycle.
+
+Regression checks:
+`node --test tests/request-body.test.mjs tests/admin-mutation.test.mjs`.
+
 ## Loading states
 
 Session checks, page details, table fetches, dashboard totals and search
@@ -94,6 +109,16 @@ fields. There are no fabricated sidebar badges, alert indicators or role-preview
 controls. Detail `.render.tsx` entry points use the authenticated application
 router and the current URL, not hard-coded record IDs; open a real detail URL
 after signing in to inspect a record.
+
+### Administrator access
+
+Role context starts unassigned with no permission grants. It uses only validated
+administrator-session claims, clears the role and permissions together on
+sign-out/session failure, and denies unknown roles instead of displaying a
+super-admin fallback. Local role definitions are display metadata, not authority
+to call a protected API. Permission types are derived from the runtime catalog.
+
+Focused regression check: `node --test tests/admin-role-context.test.mjs`.
 
 ### Validation
 

@@ -1,33 +1,4 @@
-export type Permission =
-  | "dashboard.view"
-  | "users.view"
-  | "users.manage"
-  | "users.pii"
-  | "companies.view"
-  | "companies.verify"
-  | "mentors.manage"
-  | "supervisors.manage"
-  | "listings.view"
-  | "listings.moderate"
-  | "recruitment.view"
-  | "placements.manage"
-  | "workspaces.view"
-  | "workspaces.manage"
-  | "finance.view"
-  | "finance.manage"
-  | "plans.manage"
-  | "integrations.view"
-  | "integrations.manage"
-  | "ai.view"
-  | "ai.sensitive"
-  | "notifications.manage"
-  | "support.view"
-  | "support.manage"
-  | "disputes.manage"
-  | "audit.view"
-  | "analytics.view"
-  | "analytics.export"
-  | "system.manage";
+export type Permission = (typeof ALL)[number];
 
 export type AdminRoleId =
   | "super_admin"
@@ -46,7 +17,13 @@ export interface AdminRoleDefinition {
   permissions: Permission[];
 }
 
-const ALL: Permission[] = [
+/*
+ * The runtime catalog also defines the Permission literal type, so frontend
+ * validation and labels cannot silently diverge from a separately written union.
+ * Role definitions below describe presentation; actual grants are taken from
+ * the authenticated backend response, not these local baseline arrays.
+ */
+const ALL = [
   "dashboard.view", "users.view", "users.manage", "users.pii", "companies.view",
   "companies.verify", "mentors.manage", "supervisors.manage", "listings.view",
   "listings.moderate", "recruitment.view", "placements.manage", "workspaces.view",
@@ -54,14 +31,14 @@ const ALL: Permission[] = [
   "integrations.view", "integrations.manage", "ai.view", "ai.sensitive",
   "notifications.manage", "support.view", "support.manage", "disputes.manage",
   "audit.view", "analytics.view", "analytics.export", "system.manage",
-];
+] as const;
 
 export const ADMIN_ROLES: AdminRoleDefinition[] = [
   {
     id: "super_admin",
     label: "Super administrator",
     description: "Full platform access, including system and admin role configuration.",
-    permissions: ALL,
+    permissions: [...ALL],
   },
   {
     id: "user_ops",

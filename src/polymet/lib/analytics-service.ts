@@ -41,7 +41,13 @@ const SECTION_SHAPES: Record<string, { breakdowns: string[]; series: string[] }>
   feedback: { breakdowns: ["byType", "byStatus"], series: [] },
 };
 
-/** Loads recorded analytics. `/dashboard` needs dashboard.view, `/analytics` needs analytics.view. */
+/**
+ * Loads a recorded analytics snapshot for the selected range.
+ * The server may omit sections the admin cannot read, so validate only present
+ * sections while requiring the returned breakdown/series arrays to match their
+ * declared shape. Malformed payloads throw `invalidResponse`; network/permission
+ * errors propagate from the API client.
+ */
 export async function fetchAnalytics(endpoint: "/dashboard" | "/analytics", range: AnalyticsRange): Promise<AnalyticsSnapshot> {
   const response = await apiClient.get<unknown>(endpoint, { params: { range } });
   if (!isRecord(response) || response.success !== true || !isRecord(response.analytics)) invalidResponse(endpoint);
@@ -56,7 +62,11 @@ export async function fetchAnalytics(endpoint: "/dashboard" | "/analytics", rang
   return snapshot as unknown as AnalyticsSnapshot;
 }
 
-/** Downloads the audited CSV export (needs analytics.export). */
+/**
+ * Downloads the audited CSV export (requires `analytics.export`).
+ * A non-string response is treated as an invalid API payload; otherwise the CSV is
+ * offered as a dated browser download and its temporary object URL is released.
+ */
 export async function downloadAnalyticsCsv(range: AnalyticsRange): Promise<void> {
   const csv = await apiClient.post<unknown>("/analytics/export", { format: "csv", range }, { headers: { Accept: "text/csv" } });
   if (typeof csv !== "string") invalidResponse("/analytics/export");
@@ -68,12 +78,13 @@ export async function downloadAnalyticsCsv(range: AnalyticsRange): Promise<void>
   URL.revokeObjectURL(url);
 }
 
-/** Adds a readable `label` for the x-axis based on the bucket size. */
+/** Formats each ISO bucket start for chart labels without mutating the source points. */
 export function labelSeries(points: SeriesPoint[], bucket: AnalyticsSnapshot["bucket"]) {
   const pattern = bucket === "month" ? "MMM yyyy" : "d MMM";
   return points.map((point) => ({ ...point, label: format(parseISO(point.period), pattern) }));
 }
 
+/** Sums the selected numeric series across every point; missing buckets count as zero. */
 export const seriesTotal = (points: SeriesPoint[], keys: string[]) =>
   points.reduce((total, point) => total + keys.reduce((sum, key) => sum + Number(point[key] ?? 0), 0), 0);
 

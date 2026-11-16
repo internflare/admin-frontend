@@ -110,7 +110,7 @@ export function AdminSidebar() {
       <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:hidden">
         <div className="rounded-md bg-sidebar-accent/60 px-3 py-2">
           <p className="text-[11px] text-muted-foreground">Signed in as</p>
-          <p className="truncate text-xs font-medium">{role.label}</p>
+          <p className="truncate text-xs font-medium">{role?.label ?? "No active administrator"}</p>
         </div>
       </SidebarFooter>
       <SidebarRail />

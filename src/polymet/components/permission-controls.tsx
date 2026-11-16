@@ -6,11 +6,15 @@ import { useAdminRole } from "@/polymet/components/admin-role-provider";
 import { AccessDenied } from "@/polymet/components/state-views";
 import { PERMISSION_LABELS, type Permission } from "@/polymet/data/admin-roles";
 
-/** Page-level guard. UI only — the backend must enforce the same rule. */
+/**
+ * Render protected ReactNode children only when can(Permission) is true.
+ * A missing role or denied server claim renders AccessDenied with explanatory
+ * labels. This is a frontend guide, not authorization for the underlying API.
+ */
 export function PermissionGuard({ permission, children }: { permission: Permission; children: ReactNode }) {
   const { can, role } = useAdminRole();
   if (!can(permission)) {
-    return <AccessDenied permissionLabel={PERMISSION_LABELS[permission]} roleLabel={role.label} />;
+    return <AccessDenied permissionLabel={PERMISSION_LABELS[permission]} roleLabel={role?.label ?? "No active administrator"} />;
   }
   return <>{children}</>;
 }

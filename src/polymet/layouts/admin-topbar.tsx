@@ -89,7 +89,7 @@ export function AdminTopbar() {
               </Avatar>
               <div className="hidden text-left leading-tight xl:block">
                 <p className="text-xs font-medium">{admin?.name}</p>
-                <p className="max-w-[160px] truncate text-[11px] text-muted-foreground">{role.label}</p>
+                <p className="max-w-[160px] truncate text-[11px] text-muted-foreground">{role?.label ?? "No active administrator"}</p>
               </div>
             </button>
           </DropdownMenuTrigger>

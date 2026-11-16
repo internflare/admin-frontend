@@ -61,7 +61,12 @@ function isSource(value: unknown): value is ActionQueueSource {
     typeof value.total === "number" && typeof value.loaded === "number";
 }
 
-/** Open records from every module the signed-in admin can view, sorted by priority then age. */
+/**
+ * Loads the server-aggregated queue of open records visible to the signed-in admin.
+ * The response is untrusted JSON: validate item/source fields and priority counts
+ * before exposing the typed queue to the UI. Invalid or incomplete payloads throw
+ * through `invalidResponse`; transport and authorization failures remain API errors.
+ */
 export async function fetchActionQueue(): Promise<ActionQueue> {
   const endpoint = "/action-queue";
   const response = await apiClient.get<unknown>(endpoint);

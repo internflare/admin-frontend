@@ -114,6 +114,8 @@ function ServicesSection({ overview }: { overview: OperationsOverview }) {
 
 function LatencySection({ overview }: { overview: OperationsOverview }) {
   const series = overview.services.map((service, i) => ({ key: service.target, label: service.name, color: CHART_COLORS[i % CHART_COLORS.length] }));
+  // Each target's history is index-aligned with `overview.periods`; missing samples
+  // are omitted rather than charted as zero latency.
   const data = overview.periods.map((period, index) => {
     const row: Record<string, string | number> = { period: periodLabel(period, overview.range) };
     for (const service of overview.services) {
@@ -215,6 +217,7 @@ function QueuesSection({ overview }: { overview: OperationsOverview }) {
 
 function IncidentCard({ incident, names, onUpdate }: { incident: Incident; names: Map<string, string>; onUpdate: (incident: Incident) => void }) {
   const [expanded, setExpanded] = useState(incident.status !== "Resolved");
+  // Reverse a copy to display newest updates first without mutating server data.
   const timeline = [...incident.timeline].reverse();
   return (
     <li className="rounded-lg border p-4">
@@ -283,6 +286,7 @@ function IncidentUpdateDialog({ incident, onClose, onSaved }: { incident: Incide
       setMessage("");
       onSaved();
     } catch (err) {
+      // Keep the dialog/form values intact so a failed update can be retried.
       toast.error(err instanceof Error ? err.message : "Couldn't post the update");
     } finally {
       setSaving(false);
@@ -366,6 +370,7 @@ function CreateIncidentDialog({ open, targets, onClose, onCreated }: { open: boo
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Keep the manual incident payload bounded to ten selected target keys.
   const toggle = (key: string, checked: boolean) =>
     setAffected((current) => (checked ? [...current, key].slice(0, 10) : current.filter((value) => value !== key)));
 
@@ -474,6 +479,8 @@ function HealthContent() {
   };
 
   const allTargets = useMemo(() => (data ? [...data.services, ...data.providers, ...data.queues] : []), [data]);
+  // "Up" intentionally includes degraded-but-reachable services; uptime ignores
+  // missing samples, while an unknown queue depth contributes zero to backlog.
   const servicesUp = data?.services.filter((service) => service.status !== "down").length ?? 0;
   const uptimes = data?.services.map((service) => service.uptimePct).filter((value): value is number => value !== null) ?? [];
   const averageUptime = uptimes.length ? Math.round((uptimes.reduce((sum, value) => sum + value, 0) / uptimes.length) * 100) / 100 : null;

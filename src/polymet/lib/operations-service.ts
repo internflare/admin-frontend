@@ -90,6 +90,12 @@ const isIncident = (value: unknown) =>
   isRecord(value) && typeof value.id === "string" && typeof value.reference === "string" &&
   typeof value.status === "string" && Array.isArray(value.timeline) && Array.isArray(value.affected);
 
+/**
+ * Loads health history and current incident summaries for one supported time range.
+ * It verifies the success envelope and the nested target/incident collections before
+ * casting unknown JSON; invalid payloads throw `invalidResponse`, and API failures
+ * (including missing permission) propagate to the caller.
+ */
 export async function fetchOperationsOverview(range: OperationsRange): Promise<OperationsOverview> {
   const endpoint = "/operations/overview";
   const response = await apiClient.get<unknown>(endpoint, { params: { range } });
@@ -102,7 +108,11 @@ export async function fetchOperationsOverview(range: OperationsRange): Promise<O
   return overview as unknown as OperationsOverview;
 }
 
-/** Runs every probe now (system.manage). */
+/**
+ * Requests an immediate probe sweep (requires `system.manage`).
+ * Returns the server timestamp for the completed check; malformed success
+ * responses throw `invalidResponse`, while request/authorization errors propagate.
+ */
 export async function runOperationsChecks(): Promise<string> {
   const endpoint = "/operations/checks";
   const response = await apiClient.post<unknown>(endpoint, {});
@@ -110,6 +120,12 @@ export async function runOperationsChecks(): Promise<string> {
   return response.checkedAt;
 }
 
+/**
+ * Reads a paged incident list for the requested status filter.
+ * Returns validated records and the server total, falling back to the loaded count
+ * only if a successful response omits a numeric total. Invalid payloads and request
+ * errors reject so query hooks can expose their standard retry state.
+ */
 export async function fetchIncidents(status: "open" | "resolved" | "all", page = 1, limit = 20) {
   const endpoint = "/operations/incidents";
   const response = await apiClient.get<unknown>(endpoint, { params: { status, page, limit } });
@@ -121,6 +137,7 @@ export async function fetchIncidents(status: "open" | "resolved" | "all", page =
   };
 }
 
+/** Creates an audited manual incident; validation/permission failures propagate from the API. */
 export async function createIncident(input: { title: string; severity: IncidentSeverity; affected: string[]; message: string }): Promise<Incident> {
   const endpoint = "/operations/incidents";
   const response = await apiClient.post<unknown>(endpoint, input);
@@ -128,6 +145,7 @@ export async function createIncident(input: { title: string; severity: IncidentS
   return response.incident as unknown as Incident;
 }
 
+/** Appends an audited status/message update and returns the refreshed incident record. */
 export async function postIncidentUpdate(id: string, input: { status: IncidentStatus; message: string }): Promise<Incident> {
   const endpoint = `/operations/incidents/${encodeURIComponent(id)}/updates`;
   const response = await apiClient.post<unknown>(endpoint, input);

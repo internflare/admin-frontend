@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAdminRole } from "@/polymet/components/admin-role-provider";
 import { useAdminAuth } from "@/polymet/components/admin-auth-provider";
 import { cn } from "@/lib/utils";
+import { useAdminMutation } from "@/polymet/lib/use-admin-mutation";
 
 export interface ConfirmActionPayload {
   reason: string;
@@ -47,8 +48,7 @@ export function ConfirmActionDialog({
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [ack, setAck] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { submitting: isSubmitting, error, run, reset: resetMutation } = useAdminMutation("The backend did not confirm this change.");
 
   const reasonValid = !requireReason || (reasonOptions ? reason.length > 0 : note.trim().length >= 10);
   const canSubmit = reasonValid && (!requireAcknowledgement || ack) && !isSubmitting;
@@ -57,8 +57,7 @@ export function ConfirmActionDialog({
     setReason("");
     setNote("");
     setAck(false);
-    setIsSubmitting(false);
-    setError(null);
+    resetMutation();
   };
 
   return (
@@ -94,17 +93,11 @@ export function ConfirmActionDialog({
           onSubmit={async (e) => {
             e.preventDefault();
             if (!canSubmit) return;
-            setIsSubmitting(true);
-            setError(null);
-            try {
+            await run(async () => {
               await onConfirm({ reason, note });
               reset();
               onOpenChange(false);
-            } catch (failure) {
-              setError(failure instanceof Error ? failure.message : "The backend did not confirm this change.");
-            } finally {
-              setIsSubmitting(false);
-            }
+            });
           }}
         >
           {children}
@@ -167,7 +160,7 @@ export function ConfirmActionDialog({
           )}
 
           <p className="text-xs text-muted-foreground">
-            This request will be sent as <span className="font-medium text-foreground">{admin?.name ?? "Administrator"}</span> ({role.label}). A successful backend mutation records its audit event.
+            This request will be sent as <span className="font-medium text-foreground">{admin?.name ?? "Administrator"}</span> ({role?.label ?? "No active administrator"}). A successful backend mutation records its audit event.
           </p>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 

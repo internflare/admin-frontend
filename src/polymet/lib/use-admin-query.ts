@@ -7,7 +7,15 @@ export interface AdminQueryState<T> {
   retry: () => void;
 }
 
-/** Wraps a service call so pages handle loading, error and retry consistently. */
+/**
+ * Runs a promise-returning query with a common loading/error/retry contract.
+ * Changing `fetcher` or calling `retry` starts a fresh request and clears stale
+ * data; only the latest mounted effect may commit results, so late responses from
+ * an old query or an unmounted page are ignored. Rejections become a readable
+ * string and are exposed rather than thrown to rendering code. Authentication and
+ * permission failures are not reinterpreted here; existing session/API handling
+ * and page permission guards remain authoritative.
+ */
 export function useAdminQuery<T>(fetcher: () => Promise<T>): AdminQueryState<T> {
   const [data, setData] = useState<T | undefined>(undefined);
   const [loading, setLoading] = useState(true);

@@ -57,13 +57,13 @@ function SourcesSummary({ queue, source, onSelect }: { queue: ActionQueue; sourc
 }
 
 function QueueContent() {
-  const [version, setVersion] = useState(0);
   const [source, setSource] = useState<string>(ALL);
   const [priority, setPriority] = useState<string>(ALL);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fetcher = useCallback(() => fetchActionQueue(), [version]);
+  const fetcher = useCallback(() => fetchActionQueue(), []);
   const { data: queue, loading, error, retry } = useAdminQuery(fetcher);
 
+  // Filtering is intentionally client-side over the server's bounded queue page;
+  // source totals below still describe all open records, including unloaded ones.
   const items = useMemo(
     () => (queue?.items ?? []).filter((item) => (source === ALL || item.source === source) && (priority === ALL || item.priority === priority)),
     [queue, source, priority],
@@ -71,7 +71,7 @@ function QueueContent() {
   const totalOpen = queue?.sources.reduce((sum, entry) => sum + entry.total, 0) ?? 0;
 
   const refresh = (
-    <Button variant="outline" size="sm" onClick={() => setVersion((value) => value + 1)} disabled={loading}>
+    <Button variant="outline" size="sm" onClick={retry} disabled={loading}>
       <RotateCwIcon className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
     </Button>
   );
@@ -197,6 +197,8 @@ function QueueContent() {
 }
 
 export default function ActionQueuePage() {
+  // The route guard controls dashboard access; the API still scopes queue sources
+  // to the current admin's permissions and reports inaccessible sources separately.
   return (
     <PermissionGuard permission="dashboard.view">
       <QueueContent />

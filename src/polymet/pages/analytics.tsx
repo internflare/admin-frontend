@@ -23,7 +23,12 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Recorded platform analytics. `commercial` shows only the finance section (Revenue analytics). */
+/**
+ * Renders only analytics sections returned for the signed-in admin's role.
+ * Route/export controls keep their existing permission guards; API authorization
+ * remains authoritative, and omitted sections are not replaced with zero values.
+ * `commercial` shows only the finance section (Revenue analytics).
+ */
 export default function AnalyticsPage({ initialTab = "all" }: { initialTab?: "all" | "commercial" }) {
   const commercialOnly = initialTab === "commercial";
   const [range, setRange] = useState<AnalyticsRange>("30d");
@@ -56,6 +61,8 @@ export default function AnalyticsPage({ initialTab = "all" }: { initialTab?: "al
       </>
     ));
 
+  // KPIs are derived only from sections the server returned for this admin's role.
+  // Period totals come from chart buckets; subscription counts are current snapshots.
   const kpis = data && (commercialOnly
     ? data.commercial && [
       { label: "Successful payments", value: seriesTotal(data.commercial.payments, ["success"]) },
